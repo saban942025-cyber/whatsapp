@@ -15,48 +15,47 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-export default function AdminDashboard() {
+export default function Admin() {
   const [orders, setOrders] = useState([]);
 
-  // האזנה בזמן אמת להזמנות חדשות
   useEffect(() => {
     const q = query(collection(db, "orders"), orderBy("timestamp", "desc"));
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const ordersData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setOrders(ordersData);
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      
+      // בדיקה אם נכנסה הזמנה חדשה להשמעת צליל
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === "added" && !snapshot.metadata.hasPendingWrites) {
+          const audio = new Audio('/notification.mp3');
+          audio.play().catch(e => console.log("צליל התראה מחכה לאינטראקציה"));
+        }
+      });
+      
+      setOrders(data);
     });
     return () => unsubscribe();
   }, []);
 
-  // עדכון סטטוס הזמנה
-  const updateStatus = async (orderId, newStatus) => {
-    const orderRef = doc(db, "orders", orderId);
-    await updateDoc(orderRef, { status: newStatus });
-    alert(`סטטוס עודכן ל: ${newStatus}`);
+  const changeStatus = async (id, status) => {
+    await updateDoc(doc(db, "orders", id), { status });
   };
 
   return (
-    <main style={{ padding: '20px', direction: 'rtl', fontFamily: 'sans-serif', backgroundColor: '#f4f4f4', minHeight: '100vh' }}>
-      <h1 style={{ color: '#075E54' }}>ניהול הזמנות - סבן 94</h1>
-      
-      <div style={{ display: 'grid', gap: '15px' }}>
+    <main dir="rtl" style={{ padding: '20px', fontFamily: 'sans-serif', backgroundColor: '#f0f0f0', minHeight: '100vh' }}>
+      <h1 style={{ color: '#075E54' }}>לוח הזמנות - סבן 94</h1>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
         {orders.map(order => (
-          <div key={order.id} style={{ background: 'white', padding: '15px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+          <div key={order.id} style={{ background: 'white', padding: '15px', borderRadius: '10px', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <strong>{order.customerName}</strong>
-              <span style={{ fontSize: '12px', color: '#666' }}>{order.timestamp?.toDate().toLocaleString()}</span>
+              <strong>{order.customerName} | {order.phone}</strong>
+              <span style={{ fontSize: '12px', background: '#eee', padding: '2px 8px', borderRadius: '10px' }}>{order.status}</span>
             </div>
-            <p style={{ margin: '5px 0' }}>📍 {order.address}</p>
-            <p style={{ margin: '5px 0' }}>📦 {order.orderType}: {order.orderDetails}</p>
-            <p style={{ fontWeight: 'bold', color: '#075E54' }}>סטטוס נוכחי: {order.status || 'התקבלה'}</p>
+            <p style={{ margin: '10px 0' }}>📦 פריטים: <span style={{ color: '#075E54', fontWeight: 'bold' }}>{order.items}</span></p>
+            <p style={{ fontSize: '14px' }}>📍 כתובת: {order.address}</p>
             
-            <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-              <button onClick={() => updateStatus(order.id, "המשאית בדרך 🚛")} style={{ padding: '8px', backgroundColor: '#34b7f1', color: 'white', border: 'none', borderRadius: '4px' }}>בדרך</button>
-              <button onClick={() => updateStatus(order.id, "סופק בהצלחה ✅")} style={{ padding: '8px', backgroundColor: '#25D366', color: 'white', border: 'none', borderRadius: '4px' }}>סופק</button>
-              <button onClick={() => updateStatus(order.id, "בוטל ❌")} style={{ padding: '8px', backgroundColor: '#e53935', color: 'white', border: 'none', borderRadius: '4px' }}>ביטול</button>
+            <div style={{ display: 'flex', gap: '5px', marginTop: '10px' }}>
+              <button onClick={() => changeStatus(order.id, "בטיפול 🚛")} style={{ flex: 1, padding: '8px', background: '#34b7f1', color: 'white', border: 'none', borderRadius: '5px' }}>בטיפול</button>
+              <button onClick={() => changeStatus(order.id, "סופק ✅")} style={{ flex: 1, padding: '8px', background: '#25D366', color: 'white', border: 'none', borderRadius: '5px' }}>סופק</button>
             </div>
           </div>
         ))}
