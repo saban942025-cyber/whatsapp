@@ -73,4 +73,4 @@ export default function ProductStudio() {
   );
 }
 
-const sInput = { padding: '10px', borderRadius: '6px', border: '1px solid #ddd', flex: '1', minWidth: '150px' };=
+const sInput = { padding: '10px', borderRadius: '6px', border: '1px solid #ddd', flex: '1', minWidth: '150px' };
