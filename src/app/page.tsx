@@ -12,85 +12,104 @@ const firebaseConfig = {
   appId: "1:670637185194:web:e897482997e75c110898d3",
 };
 
-// אתחול בטוח של Firebase כדי למנוע שגיאות ב-Re-render
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const db = getFirestore(app);
 
 const CATALOG = [
-  { id: 'sand', name: 'חול מחצבה (בלה)', icon: '🏗️' },
-  { id: 'aggregate', name: 'סומסום (בלה)', icon: '🏔️' },
-  { id: 'cement', name: 'מלט (שק)', icon: '🧱' },
-  { id: 'cont8', name: 'מכולה 8 קוב', icon: '🗑️' },
-  { id: 'cont10', name: 'מכולה 10 קוב', icon: '🚛' },
+  { id: '1', name: 'חול מחצבה (בלה)', icon: '🏗️' },
+  { id: '2', name: 'סומסום (בלה)', icon: '🏔️' },
+  { id: '3', name: 'מכולה 8 קוב', icon: '🗑️' },
+  { id: '4', name: 'מכולה 10 קוב', icon: '🚛' },
 ];
 
-export default function Home() {
+export default function OrderPage() {
   const [phone, setPhone] = useState('');
-  const [formData, setFormData] = useState({ customerName: '', address: '' });
-  const [selectedItems, setSelectedItems] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [form, setForm] = useState({ name: '', address: '' });
+  const [selected, setSelected] = useState<string[]>([]);
+  const [isSending, setIsSending] = useState(false);
 
-  // פונקציית זיהוי חכמה
-  const identifyCustomer = async (val: string) => {
-    setPhone(val);
-    if (val.length >= 10) {
-      try {
-        const q = query(collection(db, "orders"), where("phone", "==", val), orderBy("timestamp", "desc"), limit(1));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          const data = snap.docs[0].data();
-          setFormData({ customerName: data.customerName, address: data.address });
-        }
-      } catch (err) { console.error("Customer identification error", err); }
+  const toggle = (item: string) => {
+    setSelected(prev => prev.includes(item) ? prev.filter(i => i !== item) : [...prev, item]);
+  };
+
+  const autoFill = async (num: string) => {
+    setPhone(num);
+    if (num.length >= 10) {
+      const q = query(collection(db, "orders"), where("phone", "==", num), orderBy("timestamp", "desc"), limit(1));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const data = snap.docs[0].data();
+        setForm({ name: data.customerName || '', address: data.address || '' });
+      }
     }
   };
 
-  const toggleItem = (name: string) => {
-    setSelectedItems(prev => prev.includes(name) ? prev.filter(i => i !== name) : [...prev, name]);
-  };
+  const executeOrder = async () => {
+    if (!phone || selected.length === 0) return alert("אחי, תבחר פריטים ותמלא טלפון");
+    setIsSending(true);
+    const itemsStr = selected.join(", ");
 
-  const sendOrder = async () => {
-    if (!phone || selectedItems.length === 0) return alert("אחי, בחר לפחות פריט אחד ומלא טלפון");
-    setLoading(true);
     try {
-      const orderSummary = selectedItems.join(", ");
-      const docRef = await addDoc(collection(db, "orders"), {
-        ...formData, phone, items: orderSummary, status: "חדש", timestamp: new Date()
+      // 1. SharePoint Webhook
+      await fetch('YOUR_SHAREPOINT_WEBHOOK_URL', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customer: form.name, phone, items: itemsStr, address: form.address }),
       });
-      const msg = `*הזמנה חדשה - סבן 94*\nלקוח: ${formData.customerName}\nפריטים: ${orderSummary}\nכתובת: ${formData.address}\nמעקב: ${docRef.id}`;
-      window.open(`https://wa.me/972508860896?text=${encodeURIComponent(msg)}`, '_blank');
-      setSelectedItems([]);
-    } catch (e) { alert("תקלה בשמירה ב-Firebase"); }
-    setLoading(false);
+
+      // 2. Firebase
+      const docRef = await addDoc(collection(db, "orders"), {
+        customerName: form.name, phone, items: itemsStr, address: form.address, status: "חדש", timestamp: new Date()
+      });
+
+      // 3. WhatsApp
+      const waMsg = `*הזמנה מסבן 94*\nלקוח: ${form.name}\nפריטים: ${itemsStr}\nכתובת: ${form.address}\nמספר מעקב: ${docRef.id}`;
+      window.open(`https://wa.me/972508860896?text=${encodeURIComponent(waMsg)}`, '_blank');
+      
+      setSelected([]);
+      alert("הזמנה נקלטה!");
+    } catch (e) { alert("שגיאה בשליחה"); }
+    setIsSending(false);
   };
 
   return (
-    <main dir="rtl" style={{ fontFamily: 'sans-serif', backgroundColor: '#E5DDD5', minHeight: '100vh', paddingBottom: '100px' }}>
-      <div style={{ backgroundColor: '#075E54', color: 'white', padding: '15px', textAlign: 'center' }}>
-        <h2>סבן 94 - הזמנה חכמה</h2>
-      </div>
-      <div style={{ padding: '15px' }}>
-        <input type="tel" placeholder="מספר טלפון לזיהוי" style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #ccc', marginBottom: '10px' }} onChange={(e) => identifyCustomer(e.target.value)} />
-        <input type="text" placeholder="שם מלא" value={formData.customerName} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #ccc', marginBottom: '10px' }} onChange={(e) => setFormData({...formData, customerName: e.target.value})} />
-        <input type="text" placeholder="כתובת למשלוח" value={formData.address} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #ccc', marginBottom: '20px' }} onChange={(e) => setFormData({...formData, address: e.target.value})} />
-        <h3>בחר מה לשלוח לך:</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+    <main dir="rtl" style={{ backgroundColor: '#f5f5f7', minHeight: '100vh', fontFamily: 'system-ui' }}>
+      <header style={{ background: '#075E54', color: 'white', padding: '20px', textAlign: 'center', borderRadius: '0 0 20px 20px' }}>
+        <h1 style={{ margin: 0, fontSize: '24px' }}>SABAN 94</h1>
+        <p style={{ margin: 0, opacity: 0.8 }}>הזמנה מהירה וחכמה</p>
+      </header>
+
+      <section style={{ padding: '20px', maxWidth: '500px', margin: '0 auto' }}>
+        <div style={{ background: 'white', padding: '20px', borderRadius: '15px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
+          <input type="tel" placeholder="טלפון לזיהוי" style={inputStyle} onChange={(e) => autoFill(e.target.value)} />
+          <input type="text" placeholder="שם הלקוח" value={form.name} style={inputStyle} onChange={(e) => setForm({...form, name: e.target.value})} />
+          <input type="text" placeholder="כתובת למשלוח" value={form.address} style={inputStyle} onChange={(e) => setForm({...form, address: e.target.value})} />
+        </div>
+
+        <h3 style={{ marginTop: '25px' }}>מה לשלוח לך?</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
           {CATALOG.map(item => (
-            <div key={item.id} onClick={() => toggleItem(item.name)} style={{ 
-              padding: '15px', background: selectedItems.includes(item.name) ? '#DCF8C6' : 'white',
-              borderRadius: '10px', textAlign: 'center', cursor: 'pointer', border: selectedItems.includes(item.name) ? '2px solid #25D366' : '1px solid #ddd'
+            <div key={item.id} onClick={() => toggle(item.name)} style={{
+              padding: '20px', borderRadius: '12px', textAlign: 'center', cursor: 'pointer', transition: '0.2s',
+              background: selected.includes(item.name) ? '#DCF8C6' : 'white',
+              border: selected.includes(item.name) ? '2px solid #25D366' : '1px solid #eee'
             }}>
-              <div style={{ fontSize: '24px' }}>{item.icon}</div>
-              <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{item.name}</div>
+              <div style={{ fontSize: '32px' }}>{item.icon}</div>
+              <div style={{ fontWeight: '600' }}>{item.name}</div>
             </div>
           ))}
         </div>
-      </div>
-      <div style={{ position: 'fixed', bottom: 0, width: '100%', background: 'white', padding: '15px', boxShadow: '0 -2px 10px rgba(0,0,0,0.1)', boxSizing: 'border-box' }}>
-        <button onClick={sendOrder} disabled={loading} style={{ width: '100%', padding: '15px', background: '#25D366', color: 'white', border: 'none', borderRadius: '30px', fontWeight: 'bold', fontSize: '18px' }}>
-          {loading ? 'מעבד...' : `שלח הזמנה (${selectedItems.length} פריטים)`}
+      </section>
+
+      <footer style={{ position: 'fixed', bottom: 0, width: '100%', padding: '20px', background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(10px)', boxSizing: 'border-box' }}>
+        <button onClick={executeOrder} disabled={isSending} style={{
+          width: '100%', padding: '16px', borderRadius: '12px', border: 'none', background: '#25D366', color: 'white', fontSize: '18px', fontWeight: 'bold', boxShadow: '0 4px 12px rgba(37,211,102,0.3)'
+        }}>
+          {isSending ? 'מעבד...' : `שלח הזמנה (${selected.length})`}
         </button>
-      </div>
+      </footer>
     </main>
   );
 }
+
+const inputStyle = { width: '100%', padding: '14px', marginBottom: '12px', borderRadius: '8px', border: '1px solid #eee', fontSize: '16px', boxSizing: 'border-box' as 'border-box' };
