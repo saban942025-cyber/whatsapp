@@ -41,25 +41,24 @@ export default function OrderPage() {
       address: form.address || "ללא כתובת"
     };
 
-    try {
-      // שליחה ישירה למיקרוסופט
-      await fetch("https://defaultae1f0547569d471693f95b9524aa2b.31.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/0828f74ee7e44228b96c93eab728f280/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=lgdg1Hw--Z35PWOK6per2K02fql76m_WslheLXJL-eA", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+try {
+    const response = await fetch("https://defaultae1f0547569d471693f95b9524aa2b.31.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/0828f74ee7e44228b96c93eab728f280/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=lgdg1Hw--Z35PWOK6per2K02fql76m_WslheLXJL-eA", {
+      method: 'POST', // מוודא שזה POST באותיות גדולות
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json' 
+      },
+      body: JSON.stringify(payload)
+    });
 
-      // גיבוי ב-Firebase
-      await addDoc(collection(db, "orders"), { ...payload, timestamp: new Date() });
-
-      alert("הזמנה נשלחה בהצלחה! ✅");
-      setCart([]);
-    } catch (e) {
-      alert("שגיאה בשליחה. בדוק חיבור אינטרנט.");
-    } finally {
-      setLoading(false);
-    }
-  };
+    const result = await response.json();
+    console.log("תשובת השרת:", result);
+    
+    if (response.ok) alert("הזמנה נקלטה ב-365! ✅");
+  } catch (e) {
+    console.error("כשל בשליחה:", e);
+  }
+};
 
   return (
     <main dir="rtl" style={{ padding: '20px', fontFamily: 'sans-serif', maxWidth: '500px', margin: '0 auto' }}>
