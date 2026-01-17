@@ -1,6 +1,6 @@
 'use client';
 import { initializeApp, getApps } from "firebase/app";
-import { getFirestore, collection, addDoc, getDocs } from "firebase/firestore";
+import { getFirestore, collection, addDoc, getDocs, terminate, clearIndexedDbPersistence } from "firebase/firestore";
 import { useState, useEffect } from 'react';
 
 const firebaseConfig = {
@@ -11,9 +11,15 @@ const firebaseConfig = {
   messagingSenderId: "670637185194",
   appId: "1:670637185194:web:e897482997e75c110898d3",
 };
-
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const db = getFirestore(app);
+
+// הוספת מנגנון הגנה: אם ה-IndexedDB דפוק, ננקה אותו
+if (typeof window !== "undefined") {
+  clearIndexedDbPersistence(db).catch((err) => {
+    console.error("Could not clear IndexedDB", err);
+  });
+}
 
 export default function OrderPage() {
   const [allProducts, setAllProducts] = useState<any[]>([]);
