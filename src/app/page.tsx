@@ -1,6 +1,13 @@
 'use client';
 import { initializeApp, getApps } from "firebase/app";
-import { getFirestore, collection, addDoc, getDocs, initializeFirestore, CACHE_SIZE_UNLIMITED } from "firebase/firestore";
+import { 
+  getFirestore, 
+  collection, 
+  addDoc, 
+  getDocs, 
+  initializeFirestore, 
+  memoryLocalCache 
+} from "firebase/firestore";
 import { useState, useEffect } from 'react';
 
 const firebaseConfig = {
@@ -12,11 +19,10 @@ const firebaseConfig = {
   appId: "1:670637185194:web:e897482997e75c110898d3",
 };
 
-// אתחול Firebase עם הגנה מפני שגיאות IndexedDB
+// אתחול חסין לשגיאות דפדפן
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const db = initializeFirestore(app, {
-  // זה ימנע את השגיאה של IndexedDB שראינו בלוגים
-  localCache: undefined 
+  localCache: memoryLocalCache() // שימוש בזיכרון בלבד עוקף את שגיאת ה-IndexedDB
 });
 
 export default function OrderPage() {
@@ -31,17 +37,18 @@ export default function OrderPage() {
       try {
         const snap = await getDocs(collection(db, "products"));
         setAllProducts(snap.docs.map(d => d.data()));
-      } catch (e) { console.error("Load Error", e); }
+      } catch (e) { console.error("Firebase Load Error", e); }
     };
     load();
   }, []);
 
   const sendOrder = async () => {
-    if (cart.length === 0 || !form.phone) return alert("בחר מוצרים ומלא טלפון");
+    if (cart.length === 0 || !form.phone) return alert("נא לבחור מוצרים ולמלא טלפון");
     
     setLoading(true);
     const itemsSummary = cart.map(i => `${i.name} (x${i.qty})`).join(", ");
     
+    // הלינק המדויק ל-365
     const flowUrl = "https://defaultae1f0547569d471693f95b9524aa2b.31.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/0828f74ee7e44228b96c93eab728f280/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=lgdg1Hw--Z35PWOK6per2K02fql76m_WslheLXJL-eA";
 
     const payload = {
@@ -52,27 +59,25 @@ export default function OrderPage() {
     };
 
     try {
-      // שליחה ל-365 עם הגדרת mode למניעת חסימת עוגיות
+      // שליחה ל-365
       const flowPromise = fetch(flowUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        mode: 'cors'
+        body: JSON.stringify(payload)
       });
 
-      // שמירה ל-Firebase
+      // שמירה ב-Firebase
       const dbPromise = addDoc(collection(db, "orders"), { ...payload, timestamp: new Date(), status: "חדש" });
 
-      // מחכים לשניהם
       await Promise.all([flowPromise, dbPromise]);
 
-      alert("הזמנה נקלטה! ✅");
+      alert("הזמנה נקלטה במערכת 365! ✅");
       setCart([]);
       window.open(`https://wa.me/972508860896?text=${encodeURIComponent("הזמנה חדשה: " + itemsSummary)}`, '_blank');
       
     } catch (error) {
-      console.error("Critical error during send:", error);
-      alert("הזמנה נשלחה, אך ייתכן עיכוב ברישום ב-365.");
+      console.error("Critical Send Error", error);
+      alert("תקלה בשליחה ל-365. ההזמנה נשמרה בגיבוי.");
     } finally {
       setLoading(false);
     }
@@ -81,24 +86,29 @@ export default function OrderPage() {
   const filtered = search.length > 1 ? allProducts.filter(p => p.name.includes(search)) : [];
 
   return (
-    <main dir="rtl" style={{ padding: '20px', fontFamily: 'sans-serif', maxWidth: '500px', margin: '0 auto' }}>
-      <div style={{ background: '#fff', padding: '20px', borderRadius: '15px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' }}>
-        <h2 style={{ color: '#075E54', textAlign: 'center' }}>סבן 94 - הזמנה</h2>
+    <main dir="rtl" style={{ padding: '20px', fontFamily: 'sans-serif', backgroundColor: '#f4f7f6', minHeight: '100vh' }}>
+      <div style={{ maxWidth: '500px', margin: '0 auto', background: '#fff', padding: '20px', borderRadius: '15px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' }}>
+        <h2 style={{ color: '#075E54', textAlign: 'center' }}>סבן 94 - הזמנה חכמה</h2>
         <input type="text" placeholder="שם מלא" style={sInput} onChange={e => setForm({...form, name: e.target.value})} />
         <input type="tel" placeholder="טלפון" style={sInput} onChange={e => setForm({...form, phone: e.target.value})} />
         <input type="text" placeholder="כתובת" style={sInput} onChange={e => setForm({...form, address: e.target.value})} />
         
-        <input type="text" placeholder="חיפוש מוצר..." style={{...sInput, borderColor: '#075E54'}} value={search} onChange={e => setSearch(e.target.value)} />
+        <input type="text" placeholder="חפש מוצר (מקט/שם)..." style={{...sInput, borderColor: '#075E54'}} value={search} onChange={e => setSearch(e.target.value)} />
         {filtered.map(p => (
           <div key={p.sku} onClick={() => {setCart([...cart, {...p, qty: 1}]); setSearch('');}} style={{ padding: '10px', borderBottom: '1px solid #eee', cursor: 'pointer' }}>{p.name}</div>
         ))}
 
         <div style={{ marginTop: '20px' }}>
-          {cart.map((item, i) => <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}><span>{item.name}</span><strong>x{item.qty}</strong></div>)}
+          {cart.map((item, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', background: '#f9f9f9', padding: '10px', borderRadius: '8px', marginBottom: '5px' }}>
+              <span>{item.name}</span>
+              <strong>x{item.qty}</strong>
+            </div>
+          ))}
         </div>
 
-        <button onClick={sendOrder} disabled={loading} style={{ width: '100%', padding: '15px', background: loading ? '#ccc' : '#25D366', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 'bold', fontSize: '18px', cursor: 'pointer' }}>
-          {loading ? "מעבד..." : "שלח הזמנה ל-365"}
+        <button onClick={sendOrder} disabled={loading} style={{ width: '100%', padding: '15px', background: loading ? '#ccc' : '#25D366', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 'bold', fontSize: '18px', marginTop: '20px', cursor: 'pointer' }}>
+          {loading ? "מעבד..." : "שלח הזמנה"}
         </button>
       </div>
     </main>
