@@ -1,11 +1,10 @@
 'use client';
 import { initializeApp, getApps } from "firebase/app";
 import { 
-  getFirestore, 
+  initializeFirestore, 
   collection, 
   addDoc, 
   getDocs, 
-  initializeFirestore, 
   memoryLocalCache 
 } from "firebase/firestore";
 import { useState, useEffect } from 'react';
@@ -19,10 +18,10 @@ const firebaseConfig = {
   appId: "1:670637185194:web:e897482997e75c110898d3",
 };
 
-// אתחול חסין לשגיאות דפדפן
+// אתחול Firebase עם זיכרון RAM בלבד - זה פותר את שגיאת ה-IndexedDB!
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const db = initializeFirestore(app, {
-  localCache: memoryLocalCache() // שימוש בזיכרון בלבד עוקף את שגיאת ה-IndexedDB
+  localCache: memoryLocalCache() 
 });
 
 export default function OrderPage() {
@@ -43,12 +42,12 @@ export default function OrderPage() {
   }, []);
 
   const sendOrder = async () => {
-    if (cart.length === 0 || !form.phone) return alert("נא לבחור מוצרים ולמלא טלפון");
+    if (cart.length === 0 || !form.phone) return alert("נא למלא טלפון ולבחור מוצרים");
     
     setLoading(true);
     const itemsSummary = cart.map(i => `${i.name} (x${i.qty})`).join(", ");
     
-    // הלינק המדויק ל-365
+    // הלינק של ה-Flow שלך
     const flowUrl = "https://defaultae1f0547569d471693f95b9524aa2b.31.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/0828f74ee7e44228b96c93eab728f280/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=lgdg1Hw--Z35PWOK6per2K02fql76m_WslheLXJL-eA";
 
     const payload = {
@@ -60,24 +59,29 @@ export default function OrderPage() {
 
     try {
       // שליחה ל-365
-      const flowPromise = fetch(flowUrl, {
+      const flowResponse = await fetch(flowUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
       // שמירה ב-Firebase
-      const dbPromise = addDoc(collection(db, "orders"), { ...payload, timestamp: new Date(), status: "חדש" });
+      await addDoc(collection(db, "orders"), { ...payload, timestamp: new Date(), status: "חדש" });
 
-      await Promise.all([flowPromise, dbPromise]);
+      if (flowResponse.ok) {
+        alert("הזמנה נקלטה ב-365 בהצלחה! ✅");
+        setCart([]);
+      } else {
+        alert("הזמנה נשמרה, אך בדוק את ה-Flow ב-365.");
+      }
 
-      alert("הזמנה נקלטה במערכת 365! ✅");
-      setCart([]);
-      window.open(`https://wa.me/972508860896?text=${encodeURIComponent("הזמנה חדשה: " + itemsSummary)}`, '_blank');
+      // פתיחת ווטסאפ
+      const waMsg = `הזמנה חדשה - סבן 94:\nלקוח: ${form.name}\nפריטים: ${itemsSummary}`;
+      window.open(`https://wa.me/972508860896?text=${encodeURIComponent(waMsg)}`, '_blank');
       
     } catch (error) {
       console.error("Critical Send Error", error);
-      alert("תקלה בשליחה ל-365. ההזמנה נשמרה בגיבוי.");
+      alert("שגיאה בשליחה. נסה מדפדפן אחר או נקה זיכרון.");
     } finally {
       setLoading(false);
     }
@@ -86,14 +90,14 @@ export default function OrderPage() {
   const filtered = search.length > 1 ? allProducts.filter(p => p.name.includes(search)) : [];
 
   return (
-    <main dir="rtl" style={{ padding: '20px', fontFamily: 'sans-serif', backgroundColor: '#f4f7f6', minHeight: '100vh' }}>
-      <div style={{ maxWidth: '500px', margin: '0 auto', background: '#fff', padding: '20px', borderRadius: '15px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' }}>
+    <main dir="rtl" style={{ padding: '20px', backgroundColor: '#f4f7f6', minHeight: '100vh', fontFamily: 'sans-serif' }}>
+      <div style={{ maxWidth: '450px', margin: '0 auto', background: '#fff', padding: '20px', borderRadius: '15px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' }}>
         <h2 style={{ color: '#075E54', textAlign: 'center' }}>סבן 94 - הזמנה חכמה</h2>
         <input type="text" placeholder="שם מלא" style={sInput} onChange={e => setForm({...form, name: e.target.value})} />
         <input type="tel" placeholder="טלפון" style={sInput} onChange={e => setForm({...form, phone: e.target.value})} />
         <input type="text" placeholder="כתובת" style={sInput} onChange={e => setForm({...form, address: e.target.value})} />
         
-        <input type="text" placeholder="חפש מוצר (מקט/שם)..." style={{...sInput, borderColor: '#075E54'}} value={search} onChange={e => setSearch(e.target.value)} />
+        <input type="text" placeholder="חיפוש מוצר..." style={{...sInput, borderColor: '#075E54'}} value={search} onChange={e => setSearch(e.target.value)} />
         {filtered.map(p => (
           <div key={p.sku} onClick={() => {setCart([...cart, {...p, qty: 1}]); setSearch('');}} style={{ padding: '10px', borderBottom: '1px solid #eee', cursor: 'pointer' }}>{p.name}</div>
         ))}
@@ -107,8 +111,8 @@ export default function OrderPage() {
           ))}
         </div>
 
-        <button onClick={sendOrder} disabled={loading} style={{ width: '100%', padding: '15px', background: loading ? '#ccc' : '#25D366', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 'bold', fontSize: '18px', marginTop: '20px', cursor: 'pointer' }}>
-          {loading ? "מעבד..." : "שלח הזמנה"}
+        <button onClick={sendOrder} disabled={loading} style={{ width: '100%', padding: '15px', background: loading ? '#ccc' : '#25D366', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', marginTop: '15px' }}>
+          {loading ? "שולח נתונים..." : "שלח הזמנה ל-365"}
         </button>
       </div>
     </main>
