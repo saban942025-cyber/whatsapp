@@ -44,16 +44,11 @@ export default function OrderPage() {
   };
 
   const sendOrder = async () => {
-    if (cart.length === 0) return alert("בחר מוצרים קודם");
-    const itemsSummary = cart.map(i => `${i.name} (${i.qty})`).join(", ");
+    if (cart.length === 0 || !form.phone) return alert("בחר מוצרים ומלא טלפון");
+    const itemsSummary = cart.map(i => `${i.name} (x${i.qty})`).join(", ");
     try {
       await addDoc(collection(db, "orders"), { 
-        customerName: form.name, 
-        phone: form.phone,
-        items: itemsSummary, 
-        address: form.address, 
-        timestamp: new Date(), 
-        status: "חדש" 
+        customerName: form.name, phone: form.phone, items: itemsSummary, address: form.address, timestamp: new Date(), status: "חדש" 
       });
       const waMsg = `הזמנה חדשה מסבן 94:\nלקוח: ${form.name}\nפריטים: ${itemsSummary}\nכתובת: ${form.address}`;
       window.open(`https://wa.me/972508860896?text=${encodeURIComponent(waMsg)}`, '_blank');
@@ -65,20 +60,12 @@ export default function OrderPage() {
       <header style={{ textAlign: 'center', background: '#075E54', color: 'white', padding: '15px', borderRadius: '15px', marginBottom: '20px' }}>
         <h1>סבן 94 - הזמנה חכמה</h1>
       </header>
-
       <div style={{ maxWidth: '500px', margin: '0 auto', background: 'white', padding: '20px', borderRadius: '15px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
         <input type="text" placeholder="שם מלא" style={inputStyle} onChange={e => setForm({...form, name: e.target.value})} />
         <input type="tel" placeholder="טלפון" style={inputStyle} onChange={e => setForm({...form, phone: e.target.value})} />
         <input type="text" placeholder="כתובת" style={inputStyle} onChange={e => setForm({...form, address: e.target.value})} />
-        
         <div style={{ position: 'relative', marginTop: '15px' }}>
-          <input 
-            type="text" 
-            placeholder="חפש מוצר או מקט..." 
-            style={{ ...inputStyle, border: '2px solid #075E54' }} 
-            value={search} 
-            onChange={e => setSearch(e.target.value)} 
-          />
+          <input type="text" placeholder="חפש מוצר או מקט..." style={{ ...inputStyle, border: '2px solid #075E54' }} value={search} onChange={e => setSearch(e.target.value)} />
           {filtered.length > 0 && (
             <div style={{ position: 'absolute', width: '100%', background: 'white', zIndex: 10, borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
               {filtered.map(p => (
@@ -87,7 +74,6 @@ export default function OrderPage() {
             </div>
           )}
         </div>
-
         <div style={{ marginTop: '20px' }}>
           {cart.map(item => (
             <div key={item.sku} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', borderBottom: '1px solid #eee' }}>
@@ -100,11 +86,9 @@ export default function OrderPage() {
             </div>
           ))}
         </div>
-
-        <button onClick={sendOrder} style={{ width: '100%', padding: '15px', background: '#25D366', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 'bold', marginTop: '20px', cursor: 'pointer' }}>שלח הזמנה לווטסאפ</button>
+        <button onClick={sendOrder} style={{ width: '100%', padding: '15px', background: '#25D366', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 'bold', marginTop: '20px' }}>שלח הזמנה</button>
       </div>
     </main>
   );
 }
-
 const inputStyle = { width: '100%', padding: '12px', marginBottom: '10px', borderRadius: '8px', border: '1px solid #ddd', boxSizing: 'border-box' as 'border-box' };
