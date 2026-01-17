@@ -1,8 +1,9 @@
 'use client';
 import { initializeApp, getApps } from "firebase/app";
-import { getFirestore, collection, addDoc, query, where, getDocs, orderBy, limit } from "firebase/firestore";
+import { getFirestore, collection, addDoc, getDocs } from "firebase/firestore";
 import { useState, useEffect } from 'react';
 
+// הגדרות Firebase שלך
 const firebaseConfig = {
   apiKey: "AIzaSyC2QjUvjfALcuoM1xZMVDIXcNpwCG1-tE8",
   authDomain: "saban-system-v2.firebaseapp.com",
@@ -45,14 +46,41 @@ export default function OrderPage() {
 
   const sendOrder = async () => {
     if (cart.length === 0 || !form.phone) return alert("בחר מוצרים ומלא טלפון");
+    
     const itemsSummary = cart.map(i => `${i.name} (x${i.qty})`).join(", ");
+    const flowUrl = "https://defaultae1f0547569d471693f95b9524aa2b.31.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/0828f74ee7e44228b96c93eab728f280/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=lgdg1Hw--Z35PWOK6per2K02fql76m_WslheLXJL-eA";
+
+    const payload = {
+      customer: form.name,
+      phone: form.phone,
+      items: itemsSummary,
+      address: form.address
+    };
+
     try {
-      await addDoc(collection(db, "orders"), { 
-        customerName: form.name, phone: form.phone, items: itemsSummary, address: form.address, timestamp: new Date(), status: "חדש" 
+      // 1. שליחה ל-Power Automate (ל-SharePoint 365)
+      await fetch(flowUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
       });
+
+      // 2. שמירה ב-Firebase לגיבוי
+      await addDoc(collection(db, "orders"), { 
+        ...payload, 
+        timestamp: new Date(), 
+        status: "חדש" 
+      });
+
+      // 3. שליחה לווטסאפ
       const waMsg = `הזמנה חדשה מסבן 94:\nלקוח: ${form.name}\nפריטים: ${itemsSummary}\nכתובת: ${form.address}`;
       window.open(`https://wa.me/972508860896?text=${encodeURIComponent(waMsg)}`, '_blank');
-    } catch (e) { alert("שגיאה בשמירה"); }
+      
+      setCart([]);
+      alert("הזמנה נקלטה במערכות הארגוניות! 🚀");
+    } catch (e) {
+      alert("שגיאה בחיבור למערכת 365");
+    }
   };
 
   return (
@@ -64,6 +92,7 @@ export default function OrderPage() {
         <input type="text" placeholder="שם מלא" style={inputStyle} onChange={e => setForm({...form, name: e.target.value})} />
         <input type="tel" placeholder="טלפון" style={inputStyle} onChange={e => setForm({...form, phone: e.target.value})} />
         <input type="text" placeholder="כתובת" style={inputStyle} onChange={e => setForm({...form, address: e.target.value})} />
+        
         <div style={{ position: 'relative', marginTop: '15px' }}>
           <input type="text" placeholder="חפש מוצר או מקט..." style={{ ...inputStyle, border: '2px solid #075E54' }} value={search} onChange={e => setSearch(e.target.value)} />
           {filtered.length > 0 && (
@@ -74,6 +103,7 @@ export default function OrderPage() {
             </div>
           )}
         </div>
+
         <div style={{ marginTop: '20px' }}>
           {cart.map(item => (
             <div key={item.sku} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', borderBottom: '1px solid #eee' }}>
@@ -86,9 +116,11 @@ export default function OrderPage() {
             </div>
           ))}
         </div>
-        <button onClick={sendOrder} style={{ width: '100%', padding: '15px', background: '#25D366', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 'bold', marginTop: '20px' }}>שלח הזמנה</button>
+
+        <button onClick={sendOrder} style={{ width: '100%', padding: '15px', background: '#25D366', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 'bold', marginTop: '20px', cursor: 'pointer' }}>שלח הזמנה</button>
       </div>
     </main>
   );
 }
+
 const inputStyle = { width: '100%', padding: '12px', marginBottom: '10px', borderRadius: '8px', border: '1px solid #ddd', boxSizing: 'border-box' as 'border-box' };
