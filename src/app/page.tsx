@@ -44,33 +44,31 @@ export default function OrderPage() {
     setSearch('');
   };
 
-  const sendOrder = async () => {
-    if (cart.length === 0 || !form.phone) return alert("בחר מוצרים ומלא טלפון");
-    
-    const itemsSummary = cart.map(i => `${i.name} (x${i.qty})`).join(", ");
-    const flowUrl = "https://defaultae1f0547569d471693f95b9524aa2b.31.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/0828f74ee7e44228b96c93eab728f280/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=lgdg1Hw--Z35PWOK6per2K02fql76m_WslheLXJL-eA";
+const sendOrder = async () => {
+  if (cart.length === 0 || !form.phone) return alert("בחר מוצרים ומלא טלפון");
+  
+  const payload = {
+    customer: form.name,
+    phone: form.phone,
+    items: cart.map(i => `${i.name} (x${i.qty})`).join(", "),
+    address: form.address
+  };
 
-    const payload = {
-      customer: form.name,
-      phone: form.phone,
-      items: itemsSummary,
-      address: form.address
-    };
+  try {
+    // הוספת mode: 'no-cors' עוזרת לעקוף חסימות דפדפן מסוימות
+    fetch("https://defaultae1f0547569d471693f95b9524aa2b.31.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/0828f74ee7e44228b96c93eab728f280/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=lgdg1Hw--Z35PWOK6per2K02fql76m_WslheLXJL-eA", {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      mode: 'cors' // וודא שזה על cors
+    });
 
-    try {
-      // 1. שליחה ל-Power Automate (ל-SharePoint 365)
-      await fetch(flowUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      // 2. שמירה ב-Firebase לגיבוי
-      await addDoc(collection(db, "orders"), { 
-        ...payload, 
-        timestamp: new Date(), 
-        status: "חדש" 
-      });
+    alert("הזמנה נשלחה! בדוק את ה-SharePoint בעוד רגע.");
+    window.open(`https://wa.me/972508860896?text=${encodeURIComponent("הזמנה חדשה מסבן 94")}`, '_blank');
+  } catch (e) {
+    alert("תקלה בשליחה");
+  }
+};
 
       // 3. שליחה לווטסאפ
       const waMsg = `הזמנה חדשה מסבן 94:\nלקוח: ${form.name}\nפריטים: ${itemsSummary}\nכתובת: ${form.address}`;
