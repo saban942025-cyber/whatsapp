@@ -1,111 +1,154 @@
 'use client';
-import { useState } from 'react';
 
-export default function MobileOrderForm() {
-  const [isOpen, setIsOpen] = useState(false); // מצב תפריט המבורגר
-  const [orderType, setOrderType] = useState('חומרים');
-  const [formData, setFormData] = useState({ customer: '', details: '', address: '' });
+import React, { useState, useEffect } from 'react';
+import { db } from "@/lib/firebase";
+import { collection, getDocs } from "firebase/firestore";
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    // שליחה ישירה ל-Power Automate (הגשר שבנינו)
-    const flowUrl = "YOUR_POWER_AUTOMATE_URL";
-    await fetch(flowUrl, {
-      method: 'POST',
-      body: JSON.stringify({ ...formData, type: orderType }),
+// שימוש ב-Default Export קריטי למניעת 404
+export default function InsightsPage() {
+  const [analyzedDrivers, setAnalyzedDrivers] = useState<any[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [globalStats, setGlobalStats] = useState({ loss: 0, count: 0 });
+
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = "https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js";
+    script.async = true;
+    document.body.appendChild(script);
+  }, []);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsProcessing(true);
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const XLSX = (window as any).XLSX;
+        if (!XLSX) return alert("המערכת טוענת רכיבים, נסה שוב בעוד רגע");
+
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        await analyzeSabanLogistics(jsonData);
+      } catch (err) {
+        alert("שגיאה בניתוח הקובץ");
+      } finally {
+        setIsProcessing(false);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const analyzeSabanLogistics = async (rows: any[][]) => {
+    const rulesSnap = await getDocs(collection(db, "business_rules"));
+    const rules = rulesSnap.docs.map(d => d.data());
+
+    // מנוע ההצלבה של המלשינון (כתובות מזהות מתעודות גליה)
+    const addressMemory: any = {
+      "ישעיהו": "נישה אדריכלות נוף",
+      "החרש": "נישה אדריכלות נוף",
+      "התלמיד": "זבולון-עדיר",
+      "סמטת הגן": "בועז נחשוני"
+    };
+
+    const driverMap: any = {};
+    let totalLoss = 0;
+
+    rows.forEach((row, idx) => {
+      if (idx < 8 || !row[1]) return; // דילוג על זבל של איתורן
+      const [time, driver, , , duration, , address, , status] = row;
+      const durInt = parseFloat(duration) || 0;
+
+      if (!driverMap[driver]) driverMap[driver] = { name: driver, loss: 0, anomalies: 0, worstStop: "" };
+
+      // בדיקת חוקי עסק (30 דקות פריקה)
+      const rule = rules.find(r => address?.includes(r.item)) || { maxTime: 30 };
+      const isAnom = (status?.includes('עצירה') || status?.includes('PTO')) && durInt > rule.maxTime;
+
+      if (isAnom) {
+        const excess = durInt - rule.maxTime;
+        const moneyLost = excess * 7.5;
+        driverMap[driver].loss += moneyLost;
+        driverMap[driver].anomalies++;
+        totalLoss += moneyLost;
+        
+        // זיהוי הלקוח שבו הייתה החריגה
+        const client = Object.keys(addressMemory).find(k => address?.includes(k));
+        if (client) driverMap[driver].worstStop = addressMemory[client];
+      }
     });
-    alert("ההזמנה נשלחה בהצלחה!");
+
+    setAnalyzedDrivers(Object.values(driverMap));
+    setGlobalStats({ loss: totalLoss, count: Object.keys(driverMap).length });
   };
 
   return (
-    <div dir="rtl" style={{ fontFamily: 'sans-serif', background: '#f4f7f6', minHeight: '100vh' }}>
-      
-      {/* --- תפריט המבורגר עליון --- */}
-      <nav style={navStyle}>
-        <button onClick={() => setIsOpen(!isOpen)} style={hamburgerBtn}>
-          ☰
-        </button>
-        <div style={{ fontWeight: 'bold', fontSize: '1.2rem' }}>ח.סבן - הזמנה חדשה</div>
-        <div style={{ width: '30px' }}></div> {/* לאיזון ויזואלי */}
-      </nav>
-
-      {/* --- תוכן התפריט הנפתח --- */}
-      {isOpen && (
-        <div style={menuOverlay} onClick={() => setIsOpen(false)}>
-          <div style={menuContent} onClick={e => e.stopPropagation()}>
-            <h3 style={{ borderBottom: '1px solid #eee', paddingBottom: '10px' }}>תפריט מהיר</h3>
-            <button style={menuItem} onClick={() => window.location.href='/track'}>📦 מעקב משלוחים</button>
-            <button style={menuItem} onClick={() => window.location.href='/admin/studio'}>🎨 סטודיו ניהול</button>
-            <button style={menuItem} onClick={() => setIsOpen(false)}>❌ סגור</button>
-          </div>
+    <div dir="rtl" style={styles.container}>
+      <header style={styles.header}>
+        <div>
+          <h1 style={{margin:0}}>SABAN <span style={{color:'#2ecc71'}}>INSIGHTS</span></h1>
+          <p style={{margin:0, opacity:0.8}}>מערכת המלשינון: מי הנהג ששורף הכי הרבה כסף?</p>
         </div>
-      )}
+        <label style={styles.uploadBtn}>
+          {isProcessing ? 'מעבד...' : '📂 העלה דוח איתורן'}
+          <input type="file" onChange={handleFileUpload} style={{display:'none'}} />
+        </label>
+      </header>
 
-      {/* --- טופס ההזמנה --- */}
-      <main style={{ padding: '20px', maxWidth: '500px', margin: '0 auto' }}>
-        <form onSubmit={handleSubmit} style={formCard}>
-          <label style={labelS}>1. שם לקוח</label>
-          <input 
-            required 
-            style={inputS} 
-            placeholder="הזן שם מלא" 
-            onChange={e => setFormData({...formData, customer: e.target.value})} 
-          />
+      <div style={styles.dashboard}>
+        <div style={styles.statCard}>
+          <small>נזק כספי מצטבר</small>
+          <h2 style={{color:'#e74c3c', fontSize:'2.5rem', margin:'10px 0'}}>₪{globalStats.loss.toFixed(0)}</h2>
+        </div>
+        <div style={styles.statCard}>
+          <small>נהגים מנותחים</small>
+          <h2 style={{fontSize:'2.5rem', margin:'10px 0'}}>{globalStats.count}</h2>
+        </div>
+      </div>
 
-          <label style={labelS}>2. סוג שירות</label>
-          <div style={btnGroup}>
-            {['חומרים', 'מכולה', 'מנוף'].map(type => (
-              <button
-                key={type}
-                type="button"
-                onClick={() => setOrderType(type)}
-                style={orderType === type ? activeTypeBtn : typeBtn}
-              >
-                {type === 'חומרים' && '🏗️ '}
-                {type === 'מכולה' && '🗑️ '}
-                {type === 'מנוף' && '🏗️ '}
-                {type}
-              </button>
+      <div style={styles.tableCard}>
+        <table style={styles.table}>
+          <thead>
+            <tr style={styles.thRow}>
+              <th>נהג / משאית</th>
+              <th>חריגות פריקה</th>
+              <th>לקוח בעייתי</th>
+              <th>הפסד בחיוב</th>
+              <th>סטטוס</th>
+            </tr>
+          </thead>
+          <tbody>
+            {analyzedDrivers.sort((a,b)=>b.loss - a.loss).map(d => (
+              <tr key={d.name} style={styles.tr}>
+                <td style={{fontWeight:'bold'}}>🚚 {d.name}</td>
+                <td>{d.anomalies} פעמים</td>
+                <td style={{color:'#666'}}>{d.worstStop || "אין חריגות"}</td>
+                <td style={{color:'#c0392b', fontWeight:900}}>₪{d.loss.toFixed(0)}</td>
+                <td>
+                  <span style={styles.badge(d.loss)}>{d.loss > 300 ? 'חריג ❌' : 'יעיל ✅'}</span>
+                </td>
+              </tr>
             ))}
-          </div>
-
-          <label style={labelS}>3. פירוט הזמנה</label>
-          <textarea 
-            rows={4} 
-            style={inputS} 
-            placeholder="מה לשלוח לך?" 
-            onChange={e => setFormData({...formData, details: e.target.value})}
-          />
-
-          <label style={labelS}>4. כתובת לאספקה</label>
-          <input 
-            required 
-            style={inputS} 
-            placeholder="רחוב, עיר, מספר פרויקט" 
-            onChange={e => setFormData({...formData, address: e.target.value})}
-          />
-
-          <button type="submit" style={submitBtn}>שלח הזמנה לסידור 🚀</button>
-        </form>
-      </main>
-
-      <footer style={{ textAlign: 'center', padding: '20px', color: '#888', fontSize: '0.8rem' }}>
-        סבן חומרי בניין 1994 ©
-      </footer>
+          </tbody>
+        </table>
+        {analyzedDrivers.length === 0 && <div style={{textAlign:'center', padding:'50px', color:'#ccc'}}>העלה דוח כדי להתחיל בחקירה</div>}
+      </div>
     </div>
   );
 }
 
-// --- עיצובים (Styles) ---
-const navStyle = { background: '#075E54', color: '#fff', padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky' as 'sticky', top: 0, zIndex: 100 };
-const hamburgerBtn = { background: 'none', border: 'none', color: '#fff', fontSize: '1.8rem', cursor: 'pointer' };
-const menuOverlay = { position: 'fixed' as 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', zIndex: 200 };
-const menuContent = { background: '#fff', width: '250px', height: '100%', padding: '20px', boxShadow: '2px 0 10px rgba(0,0,0,0.2)' };
-const menuItem = { width: '100%', padding: '15px', textAlign: 'right' as 'right', background: 'none', border: 'none', borderBottom: '1px solid #f0f0f0', cursor: 'pointer', fontSize: '1rem' };
-const formCard = { background: '#fff', padding: '25px', borderRadius: '15px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' };
-const labelS = { display: 'block', marginBottom: '8px', fontWeight: 'bold' as 'bold', color: '#333' };
-const inputS = { width: '100%', padding: '12px', marginBottom: '20px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '1rem' };
-const btnGroup = { display: 'flex', gap: '10px', marginBottom: '20px' };
-const typeBtn = { flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #ddd', background: '#fff', cursor: 'pointer' };
-const activeTypeBtn = { ...typeBtn, background: '#25D366', color: '#fff', borderColor: '#25D366', fontWeight: 'bold' as 'bold' };
-const submitBtn = { width: '100%', padding: '15px', background: '#075E54', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '1.1rem', fontWeight: 'bold' as 'bold', cursor: 'pointer' };
+const styles: any = {
+  container: { background: '#f0f2f5', minHeight: '100vh', padding: '30px', fontFamily: 'system-ui' },
+  header: { background: '#075E54', color: '#fff', padding: '25px 40px', borderRadius: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' },
+  uploadBtn: { background: '#2ecc71', color: '#fff', padding: '12px 25px', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold' },
+  dashboard: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px' },
+  statCard: { background: '#fff', padding: '30px', borderRadius: '25px', textAlign: 'center', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' },
+  tableCard: { background: '#fff', padding: '30px', borderRadius: '25px', boxShadow: '0 10px 40px rgba(0,0,0,0.03)' },
+  table: { width: '100%', borderCollapse: 'collapse', textAlign: 'right' },
+  thRow: { borderBottom: '2px solid #f1f3f5', color: '#95a5a6', fontSize: '14px' },
+  tr: { borderBottom: '1px solid #f8f9fa', height: '65px' },
+  badge: (l: number) => ({ background: l > 300 ? '#ffebee' : '#e8f5e9', color: l > 300 ? '#c62828' : '#2e7d32', padding: '6px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' })
+};
