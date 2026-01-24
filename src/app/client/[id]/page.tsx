@@ -69,9 +69,16 @@ export default function ClientTaskPage({ params }: { params: { id: string } }) {
       </div>
 
       {!isSigning ? (
-        <button onClick={() => setIsSigning(true)} style={s.mainBtn}>
-          ✍️ לחץ כאן לחתימה ואישור פריקה
-        </button>
+<button 
+  onClick={(e) => {
+    e.preventDefault(); // עוצר כל פעולה אוטומטית של הדפדפן
+    e.stopPropagation(); // עוצר השפעה של תגים עוטפים
+    setIsSigning(true);
+  }} 
+  style={s.mainBtn}
+>
+  ✍️ לחץ כאן לחתימה ואישור פריקה
+</button>>
       ) : (
         <div style={s.signatureSection}>
           <label>חתימת לקוח/מנהל עבודה:</label>
