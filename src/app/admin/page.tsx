@@ -29,7 +29,7 @@ export default function RamiDashboard() {
       waitDuration: 0
     });
     
-    const taskLink = `https://whatasap.vercel.app/driver/${docRef.id}`;
+    const taskLink = `https://whatasap.vercel.app/client/${docRef.id}`;
     const waUrl = `https://api.whatsapp.com/send/?phone=${formData.phone}&text=${encodeURIComponent("חכמת אחי, משימה חדשה עבורך. כנס לאישור וחתימה: " + taskLink)}`;
     
     window.open(waUrl, '_blank');
