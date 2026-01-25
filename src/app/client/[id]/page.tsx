@@ -4,114 +4,123 @@ import React, { useState, useRef, useEffect } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import { db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
+// מפה פשוטה וחינמית
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
 
-export default function ClientTaskPage({ params }: { params: { id: string } }) {
+// תיקון לאייקון של המפה
+const icon = L.icon({ iconUrl: "https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png", iconSize: [25, 41], iconAnchor: [12, 41] });
+
+export default function DriverTaskPage({ params }: { params: { id: string } }) {
   const [task, setTask] = useState<any>(null);
   const [isSigning, setIsSigning] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [formData, setFormData] = useState({ returns: '0', waitingTime: '0', comments: '' });
   const sigPad = useRef<any>(null);
 
-  // 1. טעינת נתוני המשימה מ-Firebase לפי ה-ID בלינק
   useEffect(() => {
     const fetchTask = async () => {
-      try {
-        const docRef = doc(db, "tasks", params.id);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setTask(docSnap.data());
-        } else {
-          console.error("No such document!");
-        }
-      } catch (error) {
-        console.error("Error fetching task:", error);
-      } finally {
-        setLoading(false);
-      }
+      const docSnap = await getDoc(doc(db, "tasks", params.id));
+      if (docSnap.exists()) setTask(docSnap.data());
     };
     fetchTask();
   }, [params.id]);
 
-  // 2. פונקציית שליחת החתימה והפריקה
   const handleComplete = async () => {
-    if (sigPad.current.isEmpty()) return alert("חובה לחתום כדי לאשר קבלת סחורה");
+    if (sigPad.current.isEmpty()) return alert("חובה לחתום לאישור פריקה");
 
     const signatureData = sigPad.current.getTrimmedCanvas().toDataURL('image/png');
-    
+    const base64Content = signatureData.split(',')[1];
+
     try {
-      await updateDoc(doc(db, "tasks", params.id), {
-        status: "נסרק",
-        signature: signatureData,
-        finishTime: new Date().toLocaleTimeString('he-IL'),
-        completedAt: new Date()
+      // 1. הגשר ל-365 (הלינק שבנית ב-Power Automate)
+      const powerAutomateUrl = "https://defaultae1f0547569d471693f95b9524aa2b.31.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/bff0c0523978498e8a3ddc9fa163f2a8/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=aEqAGkUi5xEpFiBhe_tQmnO4EzRGHTqA1OdKJjFNqyM";
+
+      await fetch(powerAutomateUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer: task.client,
+          items: task.items,
+          address: task.address,
+          returns: formData.returns, // הזרקת המשטחים שביקשת
+          fileContent: base64Content,
+          fileName: `Saban_${task.client}_${new Date().getTime()}.pdf`
+        })
       });
-      alert("התעודה נשלחה בהצלחה למשרד!");
+
+      // 2. עדכון Firebase
+      await updateDoc(doc(db, "tasks", params.id), { status: "מאושר לחיוב", returns: formData.returns });
+      alert("תעודה נשלחה בהצלחה ל-365!");
       setIsSigning(false);
     } catch (e) {
-      alert("שגיאה בשליחה, נסה שוב");
+      alert("שגיאה בחיבור למשרד");
     }
   };
 
-  if (loading) return <div style={s.center}>טוען נתונים...</div>;
-  if (!task) return <div style={s.center}>משימה לא נמצאה</div>;
+  if (!task) return <div style={s.center}>טוען...</div>;
 
   return (
     <div dir="rtl" style={s.container}>
-      {/* כותרת הפרויקט */}
+      {/* כותרת וניווט */}
       <div style={s.header}>
-        <h2 style={{margin:0}}>ח. סבן - אישור פריקה</h2>
-        <div style={s.badge}>{task.client}</div>
+        <h2 style={{margin:0}}>משימת הובלה: {task.client}</h2>
+        <button onClick={() => window.open(`https://waze.com/ul?q=${encodeURIComponent(task.address)}`)} style={s.wazeBtn}>🧭 ניווט ב-Waze</button>
       </div>
 
+      {/* מפה מוטמעת */}
+      <div style={s.mapWrapper}>
+        <MapContainer center={[32.1848, 34.8713]} zoom={13} style={{ height: '200px', borderRadius: '10px' }}>
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          <Marker position={[32.1848, 34.8713]} icon={icon}>
+            <Popup>{task.address}</Popup>
+          </Marker>
+        </MapContainer>
+      </div>
+
+      {/* פרטי הזמנה */}
       <div style={s.infoCard}>
-        <p><strong>📍 כתובת:</strong> {task.address}</p>
-        <p><strong>📦 פריטים לפריקה:</strong></p>
-        <div style={s.itemsBox}>{task.items}</div>
+        <p><strong>📦 מוצרים:</strong> {task.items}</p>
+        <p><strong>📍 יעד:</strong> {task.address}</p>
       </div>
 
-      {!isSigning ? (
-<button 
-  onClick={(e) => {
-    e.preventDefault(); // עוצר כל פעולה אוטומטית של הדפדפן
-    e.stopPropagation(); // עוצר השפעה של תגים עוטפים
-    setIsSigning(true);
-  }} 
-  style={s.mainBtn}
->
-  ✍️ לחץ כאן לחתימה ואישור פריקה
-</button>>
-      ) : (
-        <div style={s.signatureSection}>
-          <label>חתימת לקוח/מנהל עבודה:</label>
-          <div style={s.canvasWrapper}>
-            <SignatureCanvas 
-              ref={sigPad}
-              canvasProps={{width: 350, height: 180, className: 'sigCanvas'}}
-            />
-          </div>
-          <div style={s.btnGroup}>
-            <button onClick={() => sigPad.current.clear()} style={s.clearBtn}>נקה</button>
-            <button onClick={handleComplete} style={s.submitBtn}>שלח תעודה חתומה ✅</button>
-          </div>
+      {/* טופס פריקה וחתימה */}
+      <div style={s.formSection}>
+        <h3>דיווח פריקה</h3>
+        <div style={s.inputGroup}>
+          <label>החזרת משטחים:</label>
+          <input type="number" value={formData.returns} onChange={e => setFormData({...formData, returns: e.target.value})} style={s.input}/>
         </div>
-      )}
-      
-      <p style={s.footer}>מערכת סריקה דיגיטלית ח. סבן 365</p>
+
+        {!isSigning ? (
+          <button onClick={() => setIsSigning(true)} style={s.mainBtn}>✍️ חתימת לקוח</button>
+        ) : (
+          <div style={s.signatureArea}>
+            <SignatureCanvas ref={sigPad} canvasProps={{width: 330, height: 150, className: 'sigCanvas'}} />
+            <div style={s.btnGroup}>
+              <button onClick={() => sigPad.current.clear()} style={s.clearBtn}>נקה</button>
+              <button onClick={handleComplete} style={s.submitBtn}>שלח ל-365 ✅</button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 const s: any = {
-  container: { padding: '20px', background: '#f8fafc', minHeight: '100vh', fontFamily: 'system-ui' },
-  center: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' },
-  header: { background: '#075E54', color: '#fff', padding: '20px', borderRadius: '15px', marginBottom: '20px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' },
-  badge: { background: '#2ecc71', display: 'inline-block', padding: '4px 12px', borderRadius: '20px', fontSize: '14px', marginTop: '10px' },
-  infoCard: { background: '#fff', padding: '15px', borderRadius: '12px', marginBottom: '20px', border: '1px solid #e2e8f0' },
-  itemsBox: { background: '#f1f5f9', padding: '10px', borderRadius: '8px', marginTop: '5px', fontWeight: 'bold' },
-  mainBtn: { width: '100%', padding: '18px', background: '#2ecc71', color: '#fff', border: 'none', borderRadius: '12px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer' },
-  signatureSection: { background: '#fff', padding: '15px', borderRadius: '12px', border: '1px solid #075E54' },
-  canvasWrapper: { border: '2px dashed #cbd5e1', borderRadius: '8px', marginTop: '10px', background: '#fff' },
-  btnGroup: { display: 'flex', gap: '10px', marginTop: '15px' },
-  clearBtn: { flex: 1, padding: '12px', background: '#e2e8f0', border: 'none', borderRadius: '8px' },
-  submitBtn: { flex: 2, padding: '12px', background: '#075E54', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold' },
-  footer: { textAlign: 'center', color: '#94a3b8', fontSize: '12px', marginTop: '30px' }
+  container: { padding: '15px', background: '#f0f4f8', minHeight: '100vh', fontFamily: 'system-ui' },
+  header: { background: '#075E54', color: '#fff', padding: '15px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  wazeBtn: { background: '#3498db', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '20px', fontWeight: 'bold' },
+  mapWrapper: { margin: '15px 0', border: '2px solid #fff', borderRadius: '12px', overflow: 'hidden' },
+  infoCard: { background: '#fff', padding: '15px', borderRadius: '12px', marginBottom: '15px' },
+  formSection: { background: '#fff', padding: '15px', borderRadius: '12px', borderTop: '4px solid #2ecc71' },
+  inputGroup: { marginBottom: '15px' },
+  input: { width: '60px', padding: '8px', marginRight: '10px', borderRadius: '5px', border: '1px solid #ddd' },
+  mainBtn: { width: '100%', padding: '15px', background: '#2ecc71', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '18px', fontWeight: 'bold' },
+  signatureArea: { border: '1px solid #075E54', borderRadius: '8px', padding: '10px' },
+  btnGroup: { display: 'flex', gap: '10px', marginTop: '10px' },
+  clearBtn: { flex: 1, padding: '10px', borderRadius: '5px' },
+  submitBtn: { flex: 2, padding: '10px', background: '#075E54', color: '#fff', border: 'none', borderRadius: '5px', fontWeight: 'bold' },
+  center: { textAlign: 'center', marginTop: '50px' }
 };
