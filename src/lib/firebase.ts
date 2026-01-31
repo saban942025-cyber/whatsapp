@@ -1,5 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
+import { getDatabase } from "firebase/database"; // 1. הוספנו את הייבוא הזה
 
 const firebaseConfig = {
   apiKey: "AIzaSyBGYsZylsIyeWudp8_SlnLBelkgoNXjU60",
@@ -15,5 +16,6 @@ const firebaseConfig = {
 // אתחול Singleton למניעת קריסות ב-Build
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const database = getDatabase(app); // 2. אתחול ה-Realtime Database
 
-export { db };
+export { db, database }; // 3. הוספנו את database לייצוא
