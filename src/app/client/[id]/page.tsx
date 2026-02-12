@@ -1,144 +1,147 @@
-'use client';
+'use client'
+import React, { useEffect, useState } from 'react';
+import { db } from '@/src/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { 
+  MessageCircle, 
+  Package, 
+  Truck, 
+  MapPin, 
+  AlertTriangle, 
+  ChevronLeft,
+  Clock,
+  History
+} from 'lucide-react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
 
-import React, { useState, useRef, useEffect } from 'react';
-import SignatureCanvas from 'react-signature-canvas';
-import { db } from "@/lib/firebase";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
-// ספריות מפה
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
-
-// תיקון ויזואלי לאייקון המפה
-const customIcon = L.icon({
-  iconUrl: "https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41]
-});
-
-export default function HachmatDriverApp({ params }: { params: { id: string } }) {
-  const [task, setTask] = useState<any>(null);
-  const [step, setStep] = useState(1); // 1: מפה וניווט, 2: דיווח וחתימה
-  const [formData, setFormData] = useState({ returns: '0', waitingTime: '0', driverNote: '' });
-  const sigPad = useRef<any>(null);
+export default function ClientDashboard() {
+  const { id } = useParams();
+  const [customer, setCustomer] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchTask = async () => {
-      const docSnap = await getDoc(doc(db, "tasks", params.id));
-      if (docSnap.exists()) setTask(docSnap.data());
-    };
-    fetchTask();
-  }, [params.id]);
+    async function fetchCustomer() {
+      if (!id) return;
+      // פענוח השם מה-URL (למשל "שחר_שאול")
+      const clientId = decodeURIComponent(id as string);
+      const docRef = doc(db, 'customer_memory', clientId);
+      const snap = await getDoc(docRef);
 
-  const sendToSaban365 = async () => {
-    if (sigPad.current.isEmpty()) return alert("חכמת, חייב חתימה בשביל גליה!");
-
-    const signatureBase64 = sigPad.current.getTrimmedCanvas().toDataURL('image/png').split(',')[1];
-
-    try {
-      const powerAutomateUrl = "https://defaultae1f0547569d471693f95b9524aa2b.31.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/bff0c0523978498e8a3ddc9fa163f2a8/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=aEqAGkUi5xEpFiBhe_tQmnO4EzRGHTqA1OdKJjFNqyM";
-
-      const payload = {
-        customer: task.client,
-        items: task.items,
-        address: task.address,
-        fileContent: signatureBase64, // שולח את החתימה ישירות ל-Flow
-        fileName: `חתימה_${task.client}_${new Date().toLocaleDateString('he-IL')}.pdf`
-      };
-
-      const res = await fetch(powerAutomateUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (res.ok) {
-        await updateDoc(doc(db, "tasks", params.id), { status: "מאושר לחיוב" });
-        alert("נשלח בהצלחה ל-SharePoint! סע לשלום אחי.");
-        window.location.href = "/thank-you"; // דף סיום נקי
+      if (snap.exists()) {
+        setCustomer(snap.data());
+        // בדיקת חריגת מכולות להשמעת צלצול
+        checkOverdueContainers(snap.data());
       }
-    } catch (e) {
-      alert("תקלה בחיבור ל-365");
+      setLoading(false);
+    }
+    fetchCustomer();
+  }, [id]);
+
+  const checkOverdueContainers = (data: any) => {
+    const hasOverdue = data.rentals?.containers?.some((c: any) => c.status === 'overdue');
+    if (hasOverdue) {
+      const audio = new Audio('/notification.mp3');
+      audio.play().catch(() => console.log("צלצול חריגה נחסם ע''י הדפדפן"));
     }
   };
 
-  if (!task) return <div style={s.loader}>טוען משימה לחכמת...</div>;
+  if (loading) return (
+    <div className="min-h-screen bg-[#E5DDD5] flex items-center justify-center font-sans" dir="rtl">
+      <div className="text-[#075E54] font-black animate-bounce text-xl">טוען נתונים מהמוח של סבן...</div>
+    </div>
+  );
+
+  if (!customer) return <div className="p-10 text-center font-bold">לקוח לא נמצא במערכת.</div>;
 
   return (
-    <div dir="rtl" style={s.appShell}>
-      {/* Header קבוע */}
-      <div style={s.topBar}>
-        <h1 style={s.logo}>ח. סבן <span style={{fontWeight:300}}>LOGISTICS</span></h1>
-        <div style={s.driverName}>שלום, חכמת 🚛</div>
+    <div className="min-h-screen bg-[#F0F2F5] font-sans pb-10" dir="rtl">
+      {/* Header - WhatsApp Style */}
+      <div className="bg-[#075E54] text-white p-6 pb-20 rounded-b-[40px] shadow-lg relative">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <img 
+                src="https://i.pravatar.cc/150?u=shahar" 
+                className="w-16 h-16 rounded-full border-2 border-white shadow-md" 
+                alt="פרופיל"
+              />
+              <div className="absolute bottom-1 right-1 w-4 h-4 bg-green-500 border-2 border-[#075E54] rounded-full"></div>
+            </div>
+            <div>
+              <h1 className="text-2xl font-black">שלום, {customer.name}</h1>
+              <p className="text-green-100 text-sm opacity-80">לקוח VIP אסטרטגי</p>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {step === 1 ? (
-        <div style={s.content}>
-          <div style={s.card}>
-            <h3>📍 יעד פריקה: {task.client}</h3>
-            <p style={s.addressText}>{task.address}</p>
-            <button onClick={() => window.open(`waze://?q=${encodeURIComponent(task.address)}&navigate=yes`)} style={s.wazeBtn}>
-              🧭 ניווט לכתובת ב-WAZE
-            </button>
-          </div>
-
-          <div style={s.mapContainer}>
-            <MapContainer center={[32.1848, 34.8713]} zoom={14} scrollWheelZoom={false} style={{height: '100%', width: '100%'}}>
-              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-              <Marker position={[32.1848, 34.8713]} icon={customIcon}>
-                <Popup>{task.client}</Popup>
-              </Marker>
-            </MapContainer>
-          </div>
-
-          <button onClick={() => setStep(2)} style={s.nextBtn}>התחל פריקה ודיווח</button>
-        </div>
-      ) : (
-        <div style={s.content}>
-          <div style={s.formCard}>
-            <h3>📦 דיווח פריקה: {task.client}</h3>
-            <div style={s.itemsList}><strong>העמסת:</strong> {task.items}</div>
-            
-            <div style={s.inputRow}>
-              <label>החזרת משטחים:</label>
-              <input type="number" style={s.smallInput} value={formData.returns} onChange={e => setFormData({...formData, returns: e.target.value})} />
+      <div className="p-4 -mt-12 space-y-4 relative z-10">
+        
+        {/* כפתור כניסה לצ'אט - בולט ומרכזי */}
+        <Link href="/chat" className="flex items-center justify-between bg-white p-6 rounded-[25px] shadow-xl border-2 border-[#25D366] active:scale-95 transition-all">
+          <div className="flex items-center gap-4">
+            <div className="bg-[#25D366] p-3 rounded-full">
+              <MessageCircle className="text-white" size={28} />
             </div>
+            <div>
+              <span className="text-xl font-black text-gray-800 block">המוח של סבן</span>
+              <span className="text-xs text-gray-500 italic">זמין כעת להזמנות ושאלות</span>
+            </div>
+          </div>
+          <ChevronLeft className="text-gray-300" />
+        </Link>
 
-            <div style={s.signatureBox}>
-              <p>חתימת הלקוח (ד. ניב / נציג בשטח):</p>
-              <div style={s.padWrapper}>
-                <SignatureCanvas ref={sigPad} canvasProps={{width: 320, height: 180, className: 'sigCanvas'}} />
+        {/* התראת מכולה במידה ויש חריגה */}
+        {customer.rentals?.containers?.map((c: any) => c.status === 'overdue' && (
+          <div key={c.id} className="bg-white p-5 rounded-[25px] shadow-md border-r-8 border-red-500 flex items-start gap-4 animate-pulse">
+            <AlertTriangle className="text-red-500 shrink-0" size={24} />
+            <div>
+              <h3 className="font-black text-red-600">שים לב! חריגת שכירות</h3>
+              <p className="text-sm text-gray-600">מכולה {c.size} ב{c.location} חרגה מ-10 ימים.</p>
+            </div>
+          </div>
+        ))}
+
+        {/* פרויקטים פעילים */}
+        <div className="bg-white rounded-[25px] p-5 shadow-sm">
+          <h3 className="text-gray-400 text-xs font-bold mb-4 flex items-center gap-2 uppercase tracking-widest">
+            <MapPin size={14} /> פרויקטים פעילים
+          </h3>
+          <div className="space-y-4">
+            {customer.projects?.map((p: any, i: number) => (
+              <div key={i} className="flex justify-between items-center border-b border-gray-50 pb-3 last:border-0">
+                <div>
+                  <p className="font-black text-gray-800">{p.name}</p>
+                  <p className="text-xs text-gray-500">{p.location}</p>
+                </div>
+                <div className="text-left">
+                   <p className="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded-full font-bold">נהג מועדף: {p.preferredDriver}</p>
+                </div>
               </div>
-              <button onClick={() => sigPad.current.clear()} style={s.clearLink}>נקה חתימה</button>
-            </div>
-
-            <button onClick={sendToSaban365} style={s.finalBtn}>שלח תעודה חתומה ל-365 ✅</button>
-            <button onClick={() => setStep(1)} style={s.backBtn}>חזור למפה</button>
+            ))}
           </div>
         </div>
-      )}
+
+        {/* היסטוריית הזמנות אחרונה */}
+        <div className="bg-white rounded-[25px] p-5 shadow-sm">
+          <h3 className="text-gray-400 text-xs font-bold mb-4 flex items-center gap-2 uppercase tracking-widest">
+            <History size={14} /> הזמנות אחרונות
+          </h3>
+          <div className="space-y-3">
+            {customer.orderHistory?.slice(0, 2).map((o: any, i: number) => (
+              <div key={i} className="flex items-center gap-3 bg-gray-50 p-3 rounded-2xl">
+                <Package className="text-gray-400" size={20} />
+                <div className="flex-1">
+                  <p className="text-sm font-bold">{o.product} - {o.quantity}</p>
+                  <p className="text-[10px] text-gray-500">{o.date} | סופק ע"י {o.driver}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 }
-
-const s: any = {
-  appShell: { background: '#f4f7f6', minHeight: '100vh', fontFamily: 'system-ui' },
-  topBar: { background: '#075E54', color: '#fff', padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 1000 },
-  logo: { fontSize: '18px', margin: 0 },
-  content: { padding: '15px' },
-  card: { background: '#fff', padding: '15px', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', marginBottom: '15px' },
-  addressText: { color: '#666', marginBottom: '15px' },
-  wazeBtn: { width: '100%', padding: '12px', background: '#3498db', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold' },
-  mapContainer: { height: '250px', borderRadius: '12px', overflow: 'hidden', marginBottom: '15px', border: '2px solid #fff' },
-  nextBtn: { width: '100%', padding: '18px', background: '#2ecc71', color: '#fff', border: 'none', borderRadius: '12px', fontSize: '18px', fontWeight: 'bold' },
-  formCard: { background: '#fff', padding: '20px', borderRadius: '15px' },
-  itemsList: { background: '#f1f5f9', padding: '10px', borderRadius: '8px', marginBottom: '15px' },
-  inputRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
-  smallInput: { width: '80px', padding: '10px', textAlign: 'center', border: '1px solid #ddd', borderRadius: '8px' },
-  signatureBox: { border: '2px dashed #075E54', borderRadius: '12px', padding: '10px', marginBottom: '20px' },
-  padWrapper: { background: '#fff', borderRadius: '8px' },
-  clearLink: { background: 'none', border: 'none', color: '#e74c3c', textDecoration: 'underline', marginTop: '5px' },
-  finalBtn: { width: '100%', padding: '18px', background: '#075E54', color: '#fff', border: 'none', borderRadius: '12px', fontSize: '18px', fontWeight: 'bold' },
-  backBtn: { width: '100%', background: 'none', border: 'none', marginTop: '15px', color: '#999' },
-  loader: { textAlign: 'center', marginTop: '100px', fontSize: '18px' }
-};
