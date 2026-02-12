@@ -1,1 +1,17 @@
 @import "tailwindcss";
+
+@theme {
+  --color-saban-green: #075E54;
+  --color-whatsapp-bg: #E5DDD5;
+  --color-shahar-bg: #DCF8C6;
+}
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-rgb: 229, 221, 213;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: rgb(var(--background-rgb));
+}
