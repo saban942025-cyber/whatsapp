@@ -1,190 +1,176 @@
 'use client'
 import React, { useState, useEffect } from 'react';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, collection, getDocs, updateDoc, arrayUnion } from 'firebase/firestore';
-import { getSabanResponse } from '@/app/actions/gemini-brain';
+import { collection, onSnapshot, doc, setDoc, updateDoc, arrayUnion, query, orderBy, limit } from 'firebase/firestore';
+import { Howl } from 'howler';
 import { 
-  UserPlus, Upload, CheckCircle, Loader2, 
-  Image as ImageIcon, Clipboard, Share2, Users, FileText 
+  Users, MessageSquare, Share2, Upload, 
+  UserPlus, Activity, ExternalLink, Clipboard, CheckCircle2 
 } from 'lucide-react';
 import Papa from 'papaparse';
 
-export default function AdminDashboard() {
+export default function AdminCRM() {
   const [customers, setCustomers] = useState<any[]>([]);
-  const [selectedCustomerId, setSelectedCustomerId] = useState('');
-  const [customerName, setCustomerName] = useState('');
-  const [profileImage, setProfileImage] = useState('');
-  const [status, setStatus] = useState('');
+  const [logs, setLogs] = useState<any[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [generatedLink, setGeneratedLink] = useState('');
+  const [newCustomer, setNewCustomer] = useState({ name: '', id: '', img: '' });
 
-  // 1. טעינת רשימת לקוחות קיימים מהמערכת
+  // אתחול צלצול התראה
+  const alertSound = new Howl({
+    src: ['/notification.mp3'],
+    html5: true,
+  });
+
+  // האזנה ללקוחות בזמן אמת (Real-time CRM)
   useEffect(() => {
-    const fetchCustomers = async () => {
-      const querySnapshot = await getDocs(collection(db, 'customer_memory'));
-      const docs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setCustomers(docs);
-    };
-    fetchCustomers();
+    const q = query(collection(db, 'customer_memory'), orderBy('lastUpdate', 'desc'));
+    const unsub = onSnapshot(q, (snap) => {
+      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setCustomers(data);
+      if (!snap.metadata.hasPendingWrites) alertSound.play(); // צלצול כשיש עדכון
+    });
+    return () => unsub();
   }, []);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    const targetId = selectedCustomerId || customerName.replace(/\s+/g, '_');
-
-    if (!file || !targetId) {
-      alert("נא לבחור לקוח קיים או להזין שם ללקוח חדש!");
-      return;
-    }
-
-    setIsProcessing(true);
-    setStatus('גימיני מנתח את ההזמנה ומקטלג לפי תאריך...');
-
-    Papa.parse(file, {
-      complete: async (results) => {
-        try {
-          const rawText = JSON.stringify(results.data.slice(0, 20));
-          // הנחיה לגימיני לחלץ תאריך ומוצרים
-          const prompt = `נתח את ה-CSV הזה. 
-          1. חלץ את התאריך המופיע במסמך (למשל 05/02/2026).
-          2. חלץ רשימת מוצרים (שם, מק"ט, כמות).
-          3. חלץ שם פרויקט וכתובת.
-          תחזיר JSON: {"date": "...", "project": "...", "products": [...], "summary": "..."}`;
-          
-          const analysisStr = await getSabanResponse(prompt, targetId);
-          const cleanJson = JSON.parse(analysisStr.replace(/```json|```/g, ''));
-
-          const brainRef = doc(db, 'customer_memory', targetId);
-          const docSnap = await getDoc(brainRef);
-
-          const orderData = {
-            orderDate: cleanJson.date,
-            items: cleanJson.products,
-            uploadedAt: new Date().toISOString()
-          };
-
-          if (docSnap.exists()) {
-            // עדכון לקוח קיים - הוספת הזמנה להיסטוריה (מקוטלג לפי תאריך)
-            await updateDoc(brainRef, {
-              orderHistory: arrayUnion(orderData),
-              lastUpdate: new Date().toISOString(),
-              status: 'preparing'
-            });
-            setStatus(`✅ הזמנה מתאריך ${cleanJson.date} נוספה לזיכרון של ${docSnap.data().name}`);
-          } else {
-            // יצירת לקוח חדש במידה ולא נבחר מהרשימה
-            await setDoc(brainRef, {
-              clientId: targetId,
-              name: customerName,
-              profileImage: profileImage || `https://i.pravatar.cc/150?u=${targetId}`,
-              orderHistory: [orderData],
-              project: cleanJson.project,
-              lastUpdate: new Date().toISOString(),
-              status: 'preparing'
-            });
-            setStatus(`✅ לקוח חדש ${customerName} נוצר עם הזמנה ראשונה.`);
-          }
-
-          setGeneratedLink(`${window.location.origin}/client/${targetId}`);
-        } catch (error) {
-          setStatus('❌ שגיאה בניתוח הקובץ');
-        } finally {
-          setIsProcessing(false);
-        }
-      }
+  // יצירת לקוח חדש
+  const handleCreate = async () => {
+    if (!newCustomer.id || !newCustomer.name) return;
+    const ref = doc(db, 'customer_memory', newCustomer.id);
+    await setDoc(ref, {
+      name: newCustomer.name,
+      profileImage: newCustomer.img || `https://i.pravatar.cc/150?u=${newCustomer.id}`,
+      lastUpdate: new Date().toISOString(),
+      orderHistory: [],
+      status: 'active'
     });
+    addLog(`לקוח חדש נוצר: ${newCustomer.name}`);
+    setNewCustomer({ name: '', id: '', img: '' });
+  };
+
+  const addLog = (msg: string) => {
+    setLogs(prev => [{ msg, time: new Date().toLocaleTimeString() }, ...prev].slice(0, 5));
+  };
+
+  const shareToWA = (id: string, name: string) => {
+    const link = `${window.location.origin}/client/${id}`;
+    const text = `שלום ${name}, ברוך הבא למערכת ההזמנות של ח. סבן! 🏗️\nמעקב והזמנות בלינק שלך:\n${link}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   return (
-    <div className="min-h-screen bg-[#F0F2F5] p-6 font-sans text-right" dir="rtl">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <div className="min-h-screen bg-[#F0F2F5] font-sans p-4 md:p-8 text-right" dir="rtl">
+      <div className="max-w-6xl mx-auto space-y-6">
         
-        <div className="bg-[#075E54] text-white p-8 rounded-[30px] shadow-lg">
-          <h1 className="text-2xl font-black flex items-center gap-3"><Users size={32} /> מרכז ניהול הזמנות - ח. סבן</h1>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* בחירת לקוח קיים */}
-          <div className="bg-white p-6 rounded-[30px] shadow-md border-t-4 border-blue-500">
-            <h2 className="font-bold mb-4 flex items-center gap-2 text-blue-600"><FileText size={20} /> בחר לקוח קיים</h2>
-            <select 
-              className="w-full p-4 bg-gray-50 rounded-2xl outline-none border-2 border-transparent focus:border-blue-500 transition-all"
-              onChange={(e) => {
-                setSelectedCustomerId(e.target.value);
-                setCustomerName(''); // מאפס יצירת חדש אם נבחר קיים
-              }}
-              value={selectedCustomerId}
-            >
-              <option value="">-- בחר לקוח מהרשימה --</option>
-              {customers.map(c => (
-                <option key={c.id} value={c.id}>{c.name} ({c.id})</option>
-              ))}
-            </select>
-          </div>
-
-          {/* הוספת לקוח חדש */}
-          <div className="bg-white p-6 rounded-[30px] shadow-md border-t-4 border-green-500">
-            <h2 className="font-bold mb-4 flex items-center gap-2 text-green-600"><UserPlus size={20} /> או צור לקוח חדש</h2>
-            <input 
-              placeholder="שם לקוח חדש" 
-              value={customerName}
-              onChange={(e) => {
-                setCustomerName(e.target.value);
-                setSelectedCustomerId(''); // מאפס בחירה אם מקלידים חדש
-              }}
-              className="w-full p-4 bg-gray-50 rounded-2xl outline-none border-2 border-transparent focus:border-green-500"
-            />
-          </div>
-        </div>
-
-        {/* העלאת קובץ וזיהוי */}
-        <div className="bg-white p-8 rounded-[30px] shadow-xl text-center">
-          <h2 className="text-xl font-black mb-6">טען הזמנה חדשה (CSV)</h2>
-          
-          {!selectedCustomerId && !customerName && (
-            <p className="text-red-500 text-sm mb-4 font-bold animate-pulse">חובה לבחור לקוח או להזין שם לפני העלאת קובץ</p>
-          )}
-
-          <div className="relative border-4 border-dashed border-gray-100 rounded-[30px] p-12 hover:bg-green-50 transition-all cursor-pointer">
-            {isProcessing ? (
-              <div className="flex flex-col items-center gap-3">
-                <Loader2 className="animate-spin text-[#25D366]" size={48} />
-                <p className="font-bold text-[#075E54]">{status}</p>
-              </div>
-            ) : (
-              <label className="cursor-pointer block">
-                <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
-                <Upload className="mx-auto text-gray-300 mb-4" size={50} />
-                <p className="font-black text-gray-500 text-lg">גרור לכאן את קובץ האקסל</p>
-                <p className="text-sm text-gray-400">גימיני יקטלג את המוצרים לפי התאריך שבקובץ</p>
-              </label>
-            )}
-          </div>
-
-          {generatedLink && (
-            <div className="mt-8 flex gap-3">
-              <button 
-                onClick={() => {
-                  const text = `שלום, ההזמנה שלך עודכנה במערכת ח. סבן! 🏗️\nלצפייה בפרטים:\n${generatedLink}`;
-                  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-                }}
-                className="flex-1 bg-[#25D366] text-white p-4 rounded-2xl font-black shadow-lg flex items-center justify-center gap-2"
-              >
-                <Share2 size={20} /> שלח עדכון בוואטסאפ
-              </button>
-              <button 
-                onClick={() => {
-                   navigator.clipboard.writeText(generatedLink);
-                   alert("הלינק הועתק!");
-                }}
-                className="bg-gray-100 p-4 rounded-2xl font-bold"
-              >
-                <Clipboard size={20} />
-              </button>
+        {/* Header CRM */}
+        <div className="bg-[#075E54] text-white p-6 rounded-[25px] shadow-lg flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-3">
+            <Users size={40} className="bg-white/10 p-2 rounded-full" />
+            <div>
+              <h1 className="text-2xl font-black">ניהול לקוחות ח. סבן (CRM)</h1>
+              <p className="text-sm opacity-80">מחוברים כעת: {customers.length} לקוחות</p>
             </div>
-          )}
+          </div>
+          <div className="flex gap-2">
+            <input 
+              placeholder="שם לקוח" 
+              value={newCustomer.name}
+              onChange={e => setNewCustomer({...newCustomer, name: e.target.value})}
+              className="p-2 rounded-lg text-black text-sm outline-none" 
+            />
+            <input 
+              placeholder="ID" 
+              value={newCustomer.id}
+              onChange={e => setNewCustomer({...newCustomer, id: e.target.value})}
+              className="p-2 rounded-lg text-black text-sm w-24 outline-none" 
+            />
+            <button onClick={handleCreate} className="bg-[#25D366] p-2 rounded-lg font-bold text-sm flex items-center gap-1">
+              <UserPlus size={16}/> הוסף
+            </button>
+          </div>
         </div>
+
+        {/* טבלת לקוחות */}
+        <div className="bg-white rounded-[25px] shadow-xl overflow-hidden">
+          <table className="w-full text-right border-collapse">
+            <thead>
+              <tr className="bg-gray-50 text-gray-400 text-xs uppercase tracking-widest border-b">
+                <th className="p-4">לקוח ופרויקט</th>
+                <th className="p-4">הודעה אחרונה / סטטוס</th>
+                <th className="p-4 text-center">פעולות</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {customers.map((c) => (
+                <tr key={c.id} className="hover:bg-green-50/50 transition-colors group">
+                  <td className="p-4 flex items-center gap-4">
+                    <div className="relative">
+                      <img src={c.profileImage} className="w-12 h-12 rounded-full border-2 border-white shadow-sm" alt="" />
+                      <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+                    </div>
+                    <div>
+                      <div className="font-black text-gray-800">{c.name}</div>
+                      <div className="text-xs text-gray-500 italic font-medium">{c.project || 'אין פרויקט פעיל'}</div>
+                    </div>
+                  </td>
+                  <td className="p-4">
+                    <div className="flex items-center gap-2">
+                      <MessageSquare size={14} className="text-gray-400" />
+                      <span className="text-sm text-gray-600 truncate max-w-[200px]">
+                        {c.lastMessage || 'ממתין להזמנה ראשונה...'}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-gray-400 mt-1 uppercase">{c.lastUpdate}</div>
+                  </td>
+                  <td className="p-4">
+                    <div className="flex justify-center items-center gap-3">
+                      <button onClick={() => shareToWA(c.id, c.name)} className="text-[#25D366] hover:scale-110 transition-transform shadow-sm bg-white p-2 rounded-full border">
+                        <Share2 size={18} />
+                      </button>
+                      <LinkIcon href={`/chat/${c.id}`} icon={<ExternalLink size={18} />} color="blue" />
+                      <div className="relative group/upload cursor-pointer bg-white p-2 rounded-full border hover:bg-gray-50 transition-all">
+                        <input 
+                          type="file" 
+                          className="absolute inset-0 opacity-0 cursor-pointer" 
+                          accept=".csv"
+                          onChange={(e) => {/* לוגיקת העלאת ה-CSV שלך */}}
+                        />
+                        <Upload size={18} className="text-orange-500" />
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* לוג פעילות בזמן אמת */}
+        <div className="bg-gray-900 text-green-400 p-6 rounded-[25px] shadow-2xl font-mono text-xs">
+          <div className="flex items-center gap-2 mb-4 border-b border-green-900/50 pb-2">
+            <Activity size={16} />
+            <span className="uppercase tracking-tighter">Activity Logs - ח. סבן System</span>
+          </div>
+          <div className="space-y-2">
+            {logs.length === 0 && <p className="opacity-50">ממתין לפעולות במערכת...</p>}
+            {logs.map((log, i) => (
+              <div key={i} className="flex gap-4">
+                <span className="opacity-50">[{log.time}]</span>
+                <span className="text-white">{log.msg}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
       </div>
     </div>
+  );
+}
+
+// קומפוננטת עזר לאייקונים עם לינק
+function LinkIcon({ href, icon, color }: { href: string, icon: any, color: string }) {
+  return (
+    <a href={href} className={`text-${color}-500 hover:scale-110 transition-transform bg-white p-2 rounded-full border shadow-sm`}>
+      {icon}
+    </a>
   );
 }
