@@ -15,3 +15,9 @@ body {
   color: rgb(var(--foreground-rgb));
   background: rgb(var(--background-rgb));
 }
+/* מזיז את פעמון ההתראות שמאלה כדי שלא יסתיר את שדה ההקלדה */
+.onesignal-bell-launcher {
+  left: 20px !important;
+  right: auto !important;
+  bottom: 80px !important;
+}
