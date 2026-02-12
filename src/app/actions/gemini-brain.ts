@@ -4,8 +4,7 @@ import { doc, getDoc } from "firebase/firestore";
 // וודא שהקובץ קיים בנתיב המצוין
 import sabanMasterBrain from "@/data/saban_master_brain.json";
 // אתחול ה-AI עם המפתח והמודל העדכני ביותר (Gemini 3 Flash Preview)
-const genAI = new GoogleGenerativeAI("AIzaSyBGYsZylsIyeWudp8_SlnLBelkgoNXjU60");
-
+const genAI = new GoogleGenerativeAI("AIzaSyB2dWSf3LChRP1dVhOVKIoprUBnX8M5PA8");
 /**
  * פונקציה לשליפת הזיכרון המצטבר של הלקוח מה-Firebase
  */
