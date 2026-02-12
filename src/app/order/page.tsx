@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic';
 
 import React, { useState, useMemo } from 'react';
-import { Calculator, ShoppingCart, Send, ArrowRight, Search, Plus, Trash2, ShieldCheck, Package, Info } from 'lucide-react';
+import { Truck, Calendar, Activity, Clock, Calculator, ShoppingCart, Send, ArrowRight, Search, Plus, Trash2, ShieldCheck, Package, Info } from 'lucide-react';
 import Link from 'next/link';
 
 // --- מוח שחר שאול: נתונים מלוטשים מה-JSON המאוחד ---
