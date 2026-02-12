@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { getDatabase } from "firebase/database"; // 1. הוספנו את הייבוא הזה
+import { getDatabase } from "firebase/database";
+import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBGYsZylsIyeWudp8_SlnLBelkgoNXjU60",
@@ -13,9 +14,10 @@ const firebaseConfig = {
   measurementId: "G-E297QYKZKQ"
 };
 
-// אתחול Singleton למניעת קריסות ב-Build
+// אתחול Singleton למניעת קריסות ב-Next.js ו-Vercel
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const database = getDatabase(app); // 2. אתחול ה-Realtime Database
 
-export { db, database }; // 3. הוספנו את database לייצוא
+// ייצוא השירותים
+export const db = getFirestore(app);           // עבור "המוח", זיכרון לקוחות והזמנות
+export const database = getDatabase(app);     // עבור נתוני איתוראן ודוחות יומיים
+export const storage = getStorage(app);       // עבור סריקת תעודות משלוח (OCR)
