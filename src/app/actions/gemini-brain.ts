@@ -3,7 +3,6 @@ import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 // וודא שהקובץ קיים בנתיב המצוין
 import sabanMasterBrain from "@/data/saban_master_brain.json";
-
 // אתחול ה-AI עם המפתח והמודל העדכני ביותר (Gemini 3 Flash Preview)
 const genAI = new GoogleGenerativeAI("AIzaSyBGYsZylsIyeWudp8_SlnLBelkgoNXjU60");
 
