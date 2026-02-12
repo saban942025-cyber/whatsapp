@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, updateDoc, query, orderBy } from 'firebase/firestore';
-import { Users, Edit3, Save, X, Share2, Image as ImageIcon, ExternalLink, Activity } from 'lucide-react';
+import { Users, Edit3, Save, X, Share2, Image as ImageIcon, MessageCircle } from 'lucide-react';
 
 export default function AdminCRM() {
   const [customers, setCustomers] = useState<any[]>([]);
@@ -18,8 +18,7 @@ export default function AdminCRM() {
 
   const handleSave = async () => {
     if (editingId) {
-      const ref = doc(db, 'customer_memory', editingId);
-      await updateDoc(ref, {
+      await updateDoc(doc(db, 'customer_memory', editingId), {
         name: editData.name,
         profileImage: editData.profileImage,
         accNum: editData.accNum || '',
@@ -27,70 +26,68 @@ export default function AdminCRM() {
         lastUpdate: new Date().toISOString()
       });
       setEditingId(null);
+      alert("עודכן בהצלחה!");
     }
   };
 
+  const shareWA = (id: string, name: string) => {
+    const link = `${window.location.origin}/client/${id}`;
+    const text = `שלום ${name}, מצורף לינק אישי למעקב הזמנות ח. סבן: ${link}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
   return (
-    <div className="min-h-screen bg-[#F0F2F5] p-4 md:p-8" dir="rtl">
+    <div className="min-h-screen bg-[#F8F9FA] p-6 text-right" dir="rtl">
       <div className="max-w-6xl mx-auto space-y-6">
-        
-        {/* Header */}
-        <div className="bg-[#075E54] text-white p-6 rounded-[25px] shadow-lg flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <Users size={32} />
-            <h1 className="text-2xl font-black">ניהול לקוחות ח. סבן - CRM</h1>
-          </div>
-          <Activity className="text-green-400 animate-pulse" />
+        <div className="bg-[#075E54] text-white p-6 rounded-3xl shadow-lg flex justify-between items-center">
+          <h1 className="text-2xl font-black flex items-center gap-2"><Users /> ניהול לקוחות ח. סבן</h1>
         </div>
 
-        {/* Table */}
-        <div className="bg-white rounded-[30px] shadow-xl overflow-hidden border border-gray-100">
-          <table className="w-full text-right">
-            <thead className="bg-gray-50 border-b text-gray-500 text-sm">
-              <tr>
-                <th className="p-5">לקוח ופרופיל</th>
-                <th className="p-5 text-center">מספר לקוח / פרויקט</th>
+        <div className="bg-white rounded-[35px] shadow-xl overflow-hidden">
+          <table className="w-full text-right border-collapse">
+            <thead className="bg-gray-50 border-b">
+              <tr className="text-gray-400 text-xs uppercase tracking-widest">
+                <th className="p-5">פרופיל</th>
+                <th className="p-5">שם ופרויקט</th>
+                <th className="p-5 text-center">מספר לקוח</th>
                 <th className="p-5 text-center">פעולות</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {customers.map(c => (
                 <tr key={c.id} className="hover:bg-green-50/30 transition-all">
-                  <td className="p-5 flex items-center gap-4">
-                    <img src={c.profileImage} className="w-14 h-14 rounded-full border-2 border-white shadow-sm object-cover" />
-                    {editingId === c.id ? (
-                      <div className="flex flex-col gap-2">
-                        <input className="border p-2 rounded-xl text-sm outline-none focus:border-[#25D366]" value={editData.name} onChange={e => setEditData({...editData, name: e.target.value})} />
-                        <input className="border p-2 rounded-xl text-[10px] w-64 text-blue-600 outline-none" value={editData.profileImage} onChange={e => setEditData({...editData, profileImage: e.target.value})} placeholder="לינק לתמונה (URL)" />
-                      </div>
-                    ) : (
-                      <div>
-                        <div className="font-black text-gray-800 text-lg">{c.name}</div>
-                        <div className="text-xs text-gray-400">ID: {c.id}</div>
-                      </div>
-                    )}
-                  </td>
-                  <td className="p-5 text-center">
-                    {editingId === c.id ? (
-                      <div className="flex flex-col gap-2 max-w-[150px] mx-auto">
-                        <input className="border p-2 rounded-xl text-sm" value={editData.accNum} onChange={e => setEditData({...editData, accNum: e.target.value})} placeholder="מספר לקוח" />
-                        <input className="border p-2 rounded-xl text-sm" value={editData.project} onChange={e => setEditData({...editData, project: e.target.value})} placeholder="שם פרויקט" />
-                      </div>
-                    ) : (
-                      <div>
-                        <div className="font-mono text-blue-600 font-bold">{c.accNum || '---'}</div>
-                        <div className="text-xs text-gray-500">{c.project}</div>
-                      </div>
-                    )}
+                  <td className="p-5">
+                    <div className="relative w-16 h-16">
+                      <img src={c.profileImage} className="w-full h-full rounded-full border-2 border-white shadow-md object-cover" />
+                    </div>
                   </td>
                   <td className="p-5">
-                    <div className="flex justify-center gap-3">
+                    {editingId === c.id ? (
+                      <div className="flex flex-col gap-2">
+                        <input className="border p-2 rounded-xl text-sm" value={editData.name} onChange={e => setEditData({...editData, name: e.target.value})} />
+                        <input className="border p-2 rounded-xl text-[10px] text-blue-500" value={editData.profileImage} onChange={e => setEditData({...editData, profileImage: e.target.value})} placeholder="לינק לתמונה (URL)" />
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="font-black text-gray-800">{c.name}</div>
+                        <div className="text-xs text-gray-400">{c.project}</div>
+                      </div>
+                    )}
+                  </td>
+                  <td className="p-5 text-center font-mono text-blue-600 font-bold">
+                    {editingId === c.id ? (
+                      <input className="border p-2 rounded-xl text-sm w-24 text-center" value={editData.accNum} onChange={e => setEditData({...editData, accNum: e.target.value})} />
+                    ) : c.accNum}
+                  </td>
+                  <td className="p-5">
+                    <div className="flex justify-center gap-2">
                       {editingId === c.id ? (
-                        <button onClick={handleSave} className="bg-green-500 text-white p-3 rounded-2xl shadow-md hover:bg-green-600"><Save size={20}/></button>
+                        <button onClick={handleSave} className="bg-green-500 text-white p-3 rounded-2xl shadow-md"><Save size={18}/></button>
                       ) : (
-                        <button onClick={() => { setEditingId(c.id); setEditData(c); }} className="bg-gray-100 p-3 rounded-2xl text-gray-500 hover:bg-gray-200"><Edit3 size={20}/></button>
+                        <button onClick={() => { setEditingId(c.id); setEditData(c); }} className="bg-gray-100 p-3 rounded-2xl text-gray-500"><Edit3 size={18}/></button>
                       )}
-                      <a href={`/client/${c.id}`} target="_blank" className="bg-blue-50 p-3 rounded-2xl text-blue-600 hover:bg-blue-100"><ExternalLink size={20}/></a>
+                      <button onClick={() => shareWA(c.id, c.name)} className="bg-green-100 text-green-600 p-3 rounded-2xl"><Share2 size={18}/></button>
+                      <a href={`/chat/${c.id}`} className="bg-blue-100 text-blue-600 p-3 rounded-2xl"><MessageCircle size={18}/></a>
                     </div>
                   </td>
                 </tr>
