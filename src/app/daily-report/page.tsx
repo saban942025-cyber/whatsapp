@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { database } from '@/lib/firebase';
 import { ref, get } from 'firebase/database';
 import { Truck, Calendar, Activity, Clock } from 'lucide-react';
-
+import { Truck, Calendar, Activity, Clock, Calculator, ShoppingCart, Send, ArrowRight, Search, Plus, Trash2, ShieldCheck, Package, Info } from 'lucide-react';
 export default function DailyReport() {
   const [selectedDate, setSelectedDate] = useState('2026-01-29');
   const [data, setData] = useState<any>(null);
