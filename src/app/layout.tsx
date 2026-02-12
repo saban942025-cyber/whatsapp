@@ -10,7 +10,10 @@ export const metadata: Metadata = {
     apple: "/icon-192.png",
   },
 };
-
+const playNotification = () => {
+  const audio = new Audio('/notification.mp3');
+  audio.play().catch(e => console.log("User interaction required for sound"));
+};
 export default function RootLayout({
   children,
 }: {
