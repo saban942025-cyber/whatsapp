@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 // וודא שהקובץ הזה קיים בנתיב המצוין במאגר שלך
-import sabanMasterBrain from "@/data/saban_master_brain.json";
+import sabanMasterBrain from "../../data/saban_master_brain.json";
 
 const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY || "");
 
