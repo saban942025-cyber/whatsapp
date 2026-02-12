@@ -7,7 +7,7 @@ export default function SeedPage() {
   const [status, setStatus] = useState('ממתין להפעלה...');
 
   const seedCustomerBrain = async () => {
-    setStatus('מעדכן נתוני עומק, מכולות והיסטוריית נהגים עבור שחר שאול...');
+    setStatus('מלמד את המוח נתוני אמת מקבצי האקסל...');
     try {
       const clientId = 'שחר_שאול';
       const brainRef = doc(db, 'customer_memory', clientId);
@@ -16,87 +16,75 @@ export default function SeedPage() {
         clientId: clientId,
         name: 'שחר שאול',
         phone: '0501234567',
-        accumulatedKnowledge: 'לקוח אסטרטגי בתחום השלד. מעדיף אספקה ב-07:00 בבוקר בדיוק. רגיש מאוד לאיכות החול (מעדיף חול מחצבה נקי). דורש משאית מנוף קטנה בלבד לאתר ברעננה בגלל רחוב צר.',
+        // המוח לומד כאן את התובנות הכלליות מהקבצים
+        accumulatedKnowledge: `לקוח רוכש קבוע של לוחות גבס (לבן 200/12.5), מוצרי בידוד וצמנט. 
+        מרבה להזמין שקי סומסום וטיט. משתמש במכולות פסולת 8 קוב באופן קבוע. 
+        הזמנות מבוצעות בדרך כלל בשעות הבוקר המוקדמות (07:00-08:00).`,
         
-        // היסטוריית פרויקטים וכתובות מדויקות
+        // פרויקטים וכתובות כפי שהופיעו בקבצים
         projects: [
           { 
             name: 'וילה רעננה', 
-            location: 'רחוב אחוזה 10, רעננה', 
-            accessNotes: 'גישה צרה מאוד, חנייה מוגבלת. חובה מנוף קטן (עד 7 טון).',
+            location: 'רעננה', 
+            accessNotes: 'גישה מוגבלת, דורש מנוף קטן. הזמנות אחרונות: גבס וסומסום.',
             preferredDriver: 'חכמת' 
           },
           { 
-            name: 'פרויקט הרצליה', 
-            location: 'רחוב הנדיב 5, הרצליה', 
-            accessNotes: 'אין הגבלת משקל, פריקה על המדרכה בתיאום מראש.',
+            name: 'תל אביב - יפו', 
+            location: 'תל אביב - יפו', 
+            accessNotes: 'פריקה במרכז העיר, דורש תיאום מראש.',
             preferredDriver: 'עלי'
           }
         ],
 
-        // היסטוריית הזמנות לטובת למידה של גימיני
+        // היסטוריית הזמנות מבוססת על קבצי ה-Export שהעלית
         orderHistory: [
-          { date: '2026-01-15', product: 'חול מחצבה', quantity: '20 שקיות', driver: 'חכמת', truck: 'מרצדס מנוף' },
-          { date: '2026-01-10', product: 'בטון מוכן', quantity: '5 קוב', driver: 'עלי', truck: 'איסוזו פלטה' },
-          { date: '2025-12-28', product: 'טיט מוכן', quantity: '10 שקים', driver: 'חכמת', truck: 'מרצדס מנוף' }
+          { date: '2026-02-05', product: 'טיט מוכן/חול מחצבה', quantity: '4-20 יחידות', driver: 'חכמת', truck: 'מרצדס מנוף' },
+          { date: '2026-01-29', product: 'לוחות גבס לבן + סומסום שק', quantity: '20-45 יחידות', driver: 'עלי', truck: 'איסוזו' },
+          { date: '2026-01-20', product: 'טיט צמנט 710 / שפכטל 634', quantity: '30-50 שקים', driver: 'חכמת', truck: 'מרצדס מנוף' }
         ],
 
-        // ניהול מכולות בשכירות - כולל חריגה של מעל 10 ימים
+        // נתוני מכולות אמת מהקבצים (למשל מכולה 8 קוב)
         rentals: {
           containers: [
             { 
-              id: 'CONT-992', 
+              id: 'CONT-82002', 
               size: '8 קוב', 
-              startDate: '2026-01-20', // תאריך ישן שיוצר חריגה של מעל 10 ימים
+              startDate: '2026-01-20', // חרג מה-10 ימים לפי קובץ Export 3
               location: 'וילה רעננה',
-              status: 'overdue',
-              dailyLateFee: 50 // קנס יומי על חריגה
-            },
-            { 
-              id: 'CONT-104', 
-              size: '10 קוב', 
-              startDate: '2026-02-08', 
-              location: 'פרויקט הרצליה',
-              status: 'active'
+              status: 'overdue' 
             }
           ]
         },
 
         preferences: {
           deliveryMethod: 'משאית מנוף קטנה',
-          preferredHours: '07:00',
-          autoNotificationOnOverdue: true // מאפשר שליחת OneSignal בחריגה
+          preferredHours: '07:20',
+          autoNotificationOnOverdue: true
         },
         lastUpdate: new Date().toISOString()
       });
 
-      setStatus('✅ הזיכרון המורחב עודכן בהצלחה! מכולות והיסטוריה בפנים.');
+      setStatus('✅ המוח של שחר שאול הוכשר בהצלחה עם נתוני האקסל!');
     } catch (error) {
       console.error(error);
-      setStatus('❌ שגיאה בביצוע ה-Seed: ' + (error as Error).message);
+      setStatus('❌ שגיאה: ' + (error as Error).message);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#E5DDD5] flex items-center justify-center p-6 font-sans" dir="rtl">
-      <div className="bg-white p-10 rounded-[30px] shadow-2xl max-w-lg w-full text-center border-t-8 border-[#075E54]">
-        <h1 className="text-3xl font-black text-[#075E54] mb-6">ניהול זיכרון - ח. סבן</h1>
-        
-        <div className="bg-gray-50 border-2 border-dashed border-gray-200 p-6 rounded-2xl mb-8">
-          <p className="text-sm text-gray-500 mb-2 font-bold">סטטוס מערכת:</p>
-          <p className="text-xl font-black text-gray-800">{status}</p>
+    <div className="min-h-screen bg-[#E5DDD5] flex items-center justify-center p-6" dir="rtl">
+      <div className="bg-white p-10 rounded-[30px] shadow-2xl max-w-lg w-full text-center">
+        <h1 className="text-2xl font-black text-[#075E54] mb-6">הזרקת היסטוריית אקסל למוח</h1>
+        <div className="bg-gray-50 p-4 rounded-2xl mb-6">
+          <p className="text-gray-700">{status}</p>
         </div>
-
         <button 
           onClick={seedCustomerBrain}
-          className="w-full bg-[#25D366] hover:bg-[#1ebd5e] text-white text-xl font-black py-5 rounded-2xl shadow-lg transform active:scale-95 transition-all duration-200"
+          className="w-full bg-[#25D366] text-white font-bold py-4 rounded-2xl shadow-lg hover:bg-[#1ebd5e] transition-all"
         >
-          עדכן נתונים, מכולות והיסטוריה 🚀
+          למד את המוח מהקבצים 🚀
         </button>
-        
-        <p className="mt-6 text-gray-400 text-sm italic">
-          * לחיצה על הכפתור תעדכן את הזיכרון של שחר שאול ב-Firebase
-        </p>
       </div>
     </div>
   );
