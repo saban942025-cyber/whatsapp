@@ -1,87 +1,85 @@
 'use client'
 import React, { useEffect, useState, useRef } from 'react';
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { Howl } from 'howler';
-import { useParams } from 'next/navigation'; // חשוב: לשליפת ה-ID מהלינק
-import { Send, ChevronLeft, MoreVertical, BellRing } from 'lucide-react';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { useParams } from 'next/navigation';
+import { Send, ChevronLeft, BellRing } from 'lucide-react';
 import Link from 'next/link';
 
 export default function ChatPage() {
   const params = useParams();
-  const clientId = params.id ? decodeURIComponent(params.id as string) : 'שחר_שאול';
+  const clientId = params.id ? decodeURIComponent(params.id as string) : '';
   
   const [customer, setCustomer] = useState<any>(null);
   const [inputText, setInputText] = useState('');
-  const soundRef = useRef<Howl | null>(null);
+  const [greeting, setGreeting] = useState('');
 
-  // אתחול צלצול
+  // 1. קביעת ברכה לפי זמן ביום
   useEffect(() => {
-    soundRef.current = new Howl({
-      src: ['/notification.mp3'],
-      html5: true,
-      volume: 1.0
-    });
+    const hour = new Date().getHours();
+    if (hour < 12) setGreeting('בוקר טוב');
+    else if (hour < 18) setGreeting('צהריים טובים');
+    else setGreeting('ערב טוב');
   }, []);
 
-  // האזנה לנתוני הלקוח הספציפי שנכנס
+  // 2. האזנה לנתוני לקוח ועדכון זמן כניסה אחרון
   useEffect(() => {
+    if (!clientId) return;
+
     const unsub = onSnapshot(doc(db, 'customer_memory', clientId), (docSnap) => {
       if (docSnap.exists()) {
-        setCustomer(docSnap.data());
+        const data = docSnap.data();
+        setCustomer(data);
       }
     });
+
+    // עדכון זמן כניסה נוכחי ב-Firebase (בשביל הפעם הבאה)
+    const updateVisit = async () => {
+      await updateDoc(doc(db, 'customer_memory', clientId), {
+        lastEntry: new Date().toLocaleString('he-IL', { 
+          day: '2-digit', 
+          month: '2-digit', 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        })
+      });
+    };
+    updateVisit();
+
     return () => unsub();
   }, [clientId]);
 
-  const handleSend = () => {
-    if (!inputText.trim()) return;
-    // לוגיקת שליחה...
-    setInputText('');
-  };
-
   return (
-    <div className="flex flex-col h-screen bg-[#E5DDD5] font-sans" dir="rtl">
-      {/* Header דינמי - מציג את אבי לוי אם זה הלינק שלו */}
-      <div className="bg-[#075E54] text-white p-3 flex items-center justify-between shadow-md">
-        <div className="flex items-center gap-3">
-          <Link href={`/client/${clientId}`}>
-            <ChevronLeft size={24} />
-          </Link>
-          <div className="relative">
-            <img 
-              src={customer?.profileImage || "https://i.pravatar.cc/150?u=" + clientId} 
-              className="w-10 h-10 rounded-full border border-white/20" 
-              alt="פרופיל" 
-            />
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[#075E54] rounded-full"></div>
-          </div>
-          <div>
-            <h2 className="font-bold text-base leading-tight">
-              {customer?.name || 'טוען...'}
-            </h2>
-            <span className="text-[10px] text-green-200 uppercase tracking-tighter font-medium">
-              {customer?.project || 'מחובר למערכת'}
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 opacity-80">
-          <BellRing size={20} className="cursor-pointer" onClick={() => soundRef.current?.play()} />
-          <MoreVertical size={20} />
+    <div className="flex flex-col h-screen bg-[#E5DDD5]" dir="rtl">
+      {/* Header */}
+      <div className="bg-[#075E54] text-white p-3 flex items-center gap-3 shadow-lg">
+        <Link href={`/client/${clientId}`}><ChevronLeft /></Link>
+        <img src={customer?.profileImage} className="w-10 h-10 rounded-full border" />
+        <div>
+          <h2 className="font-bold">{customer?.name || 'טוען...'}</h2>
+          <span className="text-[10px] text-green-200 tracking-widest uppercase">מחובר כעת</span>
         </div>
       </div>
 
-      {/* גוף הצאט */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] bg-repeat">
-        <div className="bg-white p-3 rounded-2xl rounded-tl-none shadow-sm max-w-[85%] self-start animate-in fade-in slide-in-from-right-2">
-          <p className="text-sm text-gray-800 font-medium">
-            שלום **{customer?.name}**, כאן המוח של סבן.  
-            הזיהוי בוצע בהצלחה לפרויקט: **{customer?.project || 'כללי'}**.  
-            איך אוכל לעזור היום?
+      {/* גוף הצאט עם בועת ברכה חכמה */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')]">
+        
+        {/* בועת הקסם של גימיני */}
+        <div className="bg-white p-4 rounded-2xl rounded-tl-none shadow-md max-w-[90%] border-r-4 border-[#25D366] animate-in fade-in slide-in-from-top-4">
+          <p className="text-sm text-gray-800 leading-relaxed">
+            {greeting} **{customer?.name}**, איזה כיף לראות אותך שוב! 🏗️
+            <br />
+            <span className="text-[11px] text-blue-600 font-bold">
+              כניסה אחרונה שלך למערכת הייתה ב-{customer?.lastEntry || 'לאחרונה'}
+            </span>
+            <br />
+            <span className="font-black">מה תרצה להזמין היום?</span>
           </p>
-          <span className="text-[9px] text-gray-400 block text-left mt-1">
-            {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </span>
+        </div>
+
+        {/* בועת סטטוס פרויקט */}
+        <div className="bg-[#DCF8C6] p-3 rounded-2xl rounded-tr-none shadow-sm max-w-[80%] self-end mr-auto">
+          <p className="text-xs">אני רואה שפרויקט **{customer?.project}** רץ חזק. להזמין לך שוב את הציוד הקבוע?</p>
         </div>
       </div>
 
@@ -90,10 +88,10 @@ export default function ChatPage() {
         <input 
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          className="flex-1 p-3 rounded-full outline-none text-sm shadow-inner"
-          placeholder="הקלד הודעה..."
+          className="flex-1 p-3 rounded-full outline-none text-sm shadow-sm"
+          placeholder="כתוב הודעה למוח של סבן..."
         />
-        <button onClick={handleSend} className="bg-[#128C7E] text-white p-3 rounded-full shadow-lg active:scale-90 transition-transform">
+        <button className="bg-[#128C7E] text-white p-3 rounded-full">
           <Send size={20} />
         </button>
       </div>
