@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Script from "next/script"; // חשוב להשתמש בזה ב-Next.js
-
+import "./globals.css";
 export const metadata: Metadata = {
   title: "סבן 94 - הזמנה חכמה",
   description: "מערכת הזמנות חומרי בניין ומכולות",
